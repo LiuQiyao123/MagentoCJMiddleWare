@@ -1,0 +1,71 @@
+# 环境变量文件
+.env
+.env.local
+.env.production
+.env.staging
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志文件
+logs/
+*.log
+
+# 数据库
+*.db
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+
+# 临时脚本和测试文件
+test_*.py
+*_test.py
+*_setup.md
+*_optimization.md
+*_testing.md
+sync_*.py
+temp_*.py
+
+# 临时文档
+TEMP_*.md
+*_GUIDE.md
+*_SETUP.md 

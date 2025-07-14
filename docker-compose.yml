@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # 中台服务
+  middleware:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+  # Celery Worker
+  celery-worker:
+    build: .
+    command: celery -A app.services.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mysql
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+  # Celery Beat (定时任务)
+  celery-beat:
+    build: .
+    command: celery -A app.services.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mysql
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+  # Flower (Celery监控)
+  flower:
+    build: .
+    command: celery -A app.services.celery_app flower
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - magento-cj-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  magento-cj-network:
+    driver: bridge
