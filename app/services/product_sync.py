@@ -341,6 +341,133 @@ class ProductSyncService:
         # 实际实现取决于具体的业务需求
         pass
     
+    async def sync_single_product(self, product_id: str, product_url: Optional[str] = None) -> Dict[str, Any]:
+        """
+        同步单个CJ商品到Magento
+        
+        Args:
+            product_id: CJ商品ID
+            product_url: CJ商品链接（可选，用于日志记录）
+            
+        Returns:
+            同步结果字典
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            logger.info("开始同步单个商品", product_id=product_id)
+            
+            # 1. 从CJ获取商品详情
+            cj_product = await self.cj_client.get_product_detail(product_id)
+            if not cj_product:
+                raise ValueError(f"商品不存在: {product_id}")
+            
+            # 2. 转换为Magento格式
+            magento_product_data = self._build_magento_product(cj_product)
+            
+            # 3. 创建Magento产品
+            magento_result = await self.magento_client.create_product(magento_product_data)
+            
+            # 4. 计算同步耗时
+            sync_duration = int((time.time() - start_time) * 1000)  # 转换为毫秒
+            
+            # 5. 记录同步日志
+            await self._log_sync_result(
+                product_id=product_id,
+                success=True,
+                magento_id=magento_result.get("id"),
+                error_message=None,
+                product_url=product_url,
+                sync_duration=sync_duration
+            )
+            
+            logger.info("单个商品同步成功", 
+                       product_id=product_id, 
+                       magento_id=magento_result.get("id"),
+                       duration_ms=sync_duration)
+            
+            return {
+                "product_name": cj_product.get("name"),
+                "magento_id": magento_result.get("id"),
+                "sku": magento_product_data.get("sku"),
+                "magento_url": f"{self.settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
+            }
+            
+        except Exception as e:
+            error_message = str(e)
+            sync_duration = int((time.time() - start_time) * 1000)
+            
+            logger.error("单个商品同步失败", 
+                        product_id=product_id, 
+                        error=error_message,
+                        duration_ms=sync_duration)
+            
+            # 记录错误日志
+            await self._log_sync_result(
+                product_id=product_id,
+                success=False,
+                magento_id=None,
+                error_message=error_message,
+                product_url=product_url,
+                sync_duration=sync_duration
+            )
+            
+            raise e
+
+    async def _log_sync_result(self, product_id: str, success: bool, 
+                              magento_id: Optional[str], error_message: Optional[str],
+                              product_url: Optional[str] = None, sync_duration: Optional[int] = None):
+        """
+        记录同步结果到数据库
+        
+        Args:
+            product_id: CJ商品ID
+            success: 是否成功
+            magento_id: Magento产品ID
+            error_message: 错误信息
+            product_url: CJ商品链接
+            sync_duration: 同步耗时(毫秒)
+        """
+        try:
+            from app.models.sync_log import SyncLog
+            from app.config.database import get_db
+            
+            # 获取数据库会话
+            async with get_db() as db:
+                # 创建日志记录
+                sync_log = SyncLog(
+                    product_id=product_id,
+                    product_url=product_url,
+                    success=success,
+                    magento_id=magento_id,
+                    error_message=error_message,
+                    sync_duration=sync_duration
+                )
+                
+                # 如果有错误，设置错误代码
+                if not success and error_message:
+                    if "商品不存在" in error_message:
+                        sync_log.error_code = "2001"
+                    elif "URL解析失败" in error_message:
+                        sync_log.error_code = "1002"
+                    elif "无效的CJ商品链接" in error_message:
+                        sync_log.error_code = "1001"
+                    else:
+                        sync_log.error_code = "5001"
+                
+                # 保存到数据库
+                db.add(sync_log)
+                await db.commit()
+                
+                logger.info("同步日志已记录", 
+                           log_id=sync_log.id,
+                           product_id=product_id,
+                           success=success)
+                
+        except Exception as e:
+            logger.error("记录同步日志失败", error=str(e))
+    
     async def _log_sync_operation(
         self,
         session: AsyncSession,

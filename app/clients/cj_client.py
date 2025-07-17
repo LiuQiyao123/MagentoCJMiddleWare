@@ -410,6 +410,55 @@ class CJClient:
         """获取商品分类"""
         return await self._make_request("GET", "/product/getCategory")
     
+    async def get_popular_categories(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """获取热门分类（产品数量最多的分类）"""
+        try:
+            categories_response = await self.get_categories()
+            categories = categories_response.get("data", {}).get("list", [])
+            
+            # 按产品数量排序，返回前N个热门分类
+            popular_categories = sorted(
+                categories,
+                key=lambda x: x.get("productCount", 0),
+                reverse=True
+            )[:limit]
+            
+            return popular_categories
+            
+        except Exception as e:
+            logger.error("Failed to get popular categories", error=str(e))
+            return []
+    
+    async def get_category_products(self, category_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取指定分类的所有产品"""
+        try:
+            products = []
+            page = 1
+            page_size = 20
+            
+            while len(products) < limit:
+                response = await self.search_products(
+                    category_id=category_id,
+                    page=page,
+                    page_size=min(page_size, limit - len(products))
+                )
+                
+                page_products = response.get("data", {}).get("list", [])
+                if not page_products:
+                    break
+                    
+                products.extend(page_products)
+                page += 1
+                
+                # 添加延迟避免API限制
+                await asyncio.sleep(0.5)
+            
+            return products[:limit]
+            
+        except Exception as e:
+            logger.error(f"Failed to get products for category {category_id}", error=str(e))
+            return []
+    
     async def get_countries(self) -> Dict[str, Any]:
         """获取支持的国家列表"""
         return await self._make_request("GET", "/support/getCountry")
