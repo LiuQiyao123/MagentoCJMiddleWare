@@ -45,7 +45,7 @@ class OrderMapping(Base):
     
     # 额外信息
     notes = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    order_metadata = Column(JSON, nullable=True)
     
     # 添加索引
     __table_args__ = (

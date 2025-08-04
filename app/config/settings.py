@@ -66,21 +66,32 @@ class Settings(BaseSettings):
     
     # Magento配置
     MAGENTO_BASE_URL: str = Field(description="Magento基础URL")
-    MAGENTO_API_TOKEN: str = Field(description="Magento API Token")
-    MAGENTO_API_USER: str = Field(description="Magento API用户")
-    MAGENTO_API_PASSWORD: str = Field(description="Magento API密码")
+    MAGENTO_CONSUMER_KEY: str = Field(description="Magento Consumer Key")
+    MAGENTO_CONSUMER_SECRET: str = Field(description="Magento Consumer Secret")
+    MAGENTO_ACCESS_TOKEN: str = Field(description="Magento Access Token")
+    MAGENTO_ACCESS_TOKEN_SECRET: str = Field(description="Magento Access Token Secret")
     MAGENTO_TIMEOUT: int = Field(default=30, description="Magento API超时时间")
     MAGENTO_MAX_RETRIES: int = Field(default=3, description="Magento API最大重试次数")
+    
+    # 兼容旧配置
+    MAGENTO_CONSUMER_KEY: Optional[str] = Field(default=None, description="Magento Consumer Key (兼容)")
+    MAGENTO_CONSUMER_SECRET: Optional[str] = Field(default=None, description="Magento Consumer Secret (兼容)")
+    MAGENTO_ACCESS_TOKEN: Optional[str] = Field(default=None, description="Magento Access Token (兼容)")
+    MAGENTO_ACCESS_TOKEN_SECRET: Optional[str] = Field(default=None, description="Magento Access Token Secret (兼容)")
     
     # CJ Dropshipping配置
     CJ_API_BASE_URL: str = Field(
         default="https://developers.cjdropshipping.com/api2.0/v1",
         description="CJ API基础URL"
     )
-    CJ_API_EMAIL: str = Field(description="CJ API邮箱")
-    CJ_API_PASSWORD: str = Field(description="CJ API密码（API Key）")
+    CJ_API_KEY: str = Field(description="CJ API Key")
     CJ_TIMEOUT: int = Field(default=30, description="CJ API超时时间")
     CJ_MAX_RETRIES: int = Field(default=3, description="CJ API最大重试次数")
+    
+    # 兼容旧配置
+    CJ_API_EMAIL: Optional[str] = Field(default=None, description="CJ API邮箱 (兼容)")
+    CJ_API_PASSWORD: Optional[str] = Field(default=None, description="CJ API密码 (兼容)")
+    CJ_API_SECRET: Optional[str] = Field(default=None, description="CJ API Secret (兼容)")
     
     # 同步配置
     SYNC_INTERVAL_MINUTES: int = Field(default=30, description="同步间隔（分钟）")
@@ -97,6 +108,14 @@ class Settings(BaseSettings):
     # 监控配置
     ENABLE_METRICS: bool = Field(default=True, description="启用监控指标")
     METRICS_PORT: int = Field(default=9090, description="监控端口")
+    
+    # SSL配置
+    VERIFY_SSL: bool = Field(default=True, description="是否验证SSL证书")
+    SSL_CERT_PATH: Optional[str] = Field(default=None, description="SSL证书路径")
+    
+    # Celery配置
+    CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", description="Celery Broker URL")
+    CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2", description="Celery Result Backend URL")
     
     @validator("ALLOWED_ORIGINS", pre=True)
     def parse_cors_origins(cls, v):

@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from app.config.settings import get_settings
 from app.core.exceptions import APIException
+from app.utils.rate_limiter import get_rate_limiter, APIEndpoint
+from app.utils.token_manager import get_token_manager
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -95,17 +97,20 @@ class CJTrackingInfo(BaseModel):
 
 class CJClient:
     """CJ Dropshipping API客户端"""
-    
+
     def __init__(self):
         self.base_url = settings.CJ_API_BASE_URL
         self.email = settings.CJ_API_EMAIL
-        self.password = settings.CJ_API_PASSWORD
+        self.api_key = settings.CJ_API_KEY
         self.timeout = settings.CJ_TIMEOUT
         self.max_retries = settings.CJ_MAX_RETRIES
+        self.verify_ssl = settings.VERIFY_SSL
+        self.ssl_cert_path = settings.SSL_CERT_PATH
         
-        self._access_token: Optional[str] = None
-        self._token_expires_at: Optional[datetime] = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._access_token: Optional[str] = None
+        self._refresh_token: Optional[str] = None
+        self._token_expires_at: Optional[datetime] = None
         
     async def __aenter__(self):
         """异步上下文管理器入口"""
@@ -119,21 +124,22 @@ class CJClient:
     async def initialize(self) -> None:
         """初始化客户端"""
         try:
+            # 配置SSL验证
+            verify_ssl = self.ssl_cert_path if self.ssl_cert_path else self.verify_ssl
+            
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),
-                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                verify=verify_ssl
             )
-            
-            # 获取访问令牌
-            await self._authenticate()
             
             logger.info("CJ API client initialized successfully")
             
         except Exception as e:
             logger.error("Failed to initialize CJ API client", error=str(e))
             raise CJAPIError(
-                error_code="CJ_INIT_ERROR",
                 message="Failed to initialize CJ API client",
+                error_code="CJ_INIT_ERROR",
                 details={"error": str(e)}
             )
     
@@ -143,64 +149,7 @@ class CJClient:
             await self._client.aclose()
             self._client = None
             
-    async def _authenticate(self) -> None:
-        """认证获取访问令牌"""
-        try:
-            # 构造认证请求
-            auth_data = {
-                "email": self.email,
-                "password": self.password
-            }
-            
-            # 发送认证请求
-            response = await self._client.post(
-                f"{self.base_url}/authentication/getAccessToken",
-                json=auth_data,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code != 200:
-                raise CJAPIError(
-                    error_code="CJ_AUTH_ERROR",
-                    message="Failed to authenticate with CJ API",
-                    details={"status_code": response.status_code, "response": response.text}
-                )
-            
-            result = response.json()
-            
-            if not result.get("result"):
-                raise CJAPIError(
-                    error_code="CJ_AUTH_ERROR",
-                    message="Authentication failed",
-                    details={"response": result}
-                )
-            
-            # 保存访问令牌
-            self._access_token = result["data"]["accessToken"]
-            self._token_expires_at = datetime.now() + timedelta(seconds=result["data"]["expiresIn"])
-            
-            logger.info("CJ API authentication successful")
-            
-        except httpx.RequestError as e:
-            logger.error("CJ API authentication network error", error=str(e))
-            raise CJAPIError(
-                error_code="CJ_NETWORK_ERROR",
-                message="Network error during authentication",
-                details={"error": str(e)}
-            )
-        except Exception as e:
-            logger.error("CJ API authentication error", error=str(e))
-            raise
-    
-    async def _ensure_authenticated(self) -> None:
-        """确保认证状态有效"""
-        if not self._access_token or not self._token_expires_at:
-            await self._authenticate()
-            return
-            
-        # 检查令牌是否即将过期（提前5分钟刷新）
-        if datetime.now() >= self._token_expires_at - timedelta(minutes=5):
-            await self._authenticate()
+
     
     async def _make_request(
         self,
@@ -210,12 +159,13 @@ class CJClient:
         params: Optional[Dict] = None,
         retry_count: int = 0
     ) -> Dict[str, Any]:
-        """发送API请求"""
+        """发送API请求（内部方法，不包含频率限制）"""
         try:
+            # 确保已认证
             await self._ensure_authenticated()
             
             headers = {
-                "CJ-Access-Token": self._access_token,
+                "Authorization": f"Bearer {self._access_token}",
                 "Content-Type": "application/json"
             }
             
@@ -232,14 +182,18 @@ class CJClient:
             
             # 处理响应
             if response.status_code == 401 and retry_count < self.max_retries:
-                # 令牌过期，重新认证后重试
-                await self._authenticate()
+                # Token过期，等待一段时间后重新获取token
+                logger.warning("CJ API token expired, waiting before refresh...")
+                await asyncio.sleep(5)  # 等待5秒避免频率限制
+                self._access_token = None
+                self._token_expires_at = None
+                await self._ensure_authenticated()
                 return await self._make_request(method, endpoint, data, params, retry_count + 1)
             
             if response.status_code not in [200, 201]:
                 raise CJAPIError(
-                    error_code="CJ_REQUEST_ERROR",
                     message=f"CJ API request failed with status {response.status_code}",
+                    error_code="CJ_REQUEST_ERROR",
                     details={
                         "status_code": response.status_code,
                         "response": response.text,
@@ -251,8 +205,8 @@ class CJClient:
             
             if not result.get("result"):
                 raise CJAPIError(
-                    error_code="CJ_API_ERROR",
                     message="CJ API returned error",
+                    error_code="CJ_API_ERROR",
                     details={"response": result, "endpoint": endpoint}
                 )
             
@@ -265,8 +219,8 @@ class CJClient:
             
             logger.error("CJ API network error", error=str(e), endpoint=endpoint)
             raise CJAPIError(
-                error_code="CJ_NETWORK_ERROR",
                 message="Network error during CJ API request",
+                error_code="CJ_NETWORK_ERROR",
                 details={"error": str(e), "endpoint": endpoint}
             )
         except CJAPIError:
@@ -274,10 +228,242 @@ class CJClient:
         except Exception as e:
             logger.error("CJ API request error", error=str(e), endpoint=endpoint)
             raise CJAPIError(
-                error_code="CJ_REQUEST_ERROR",
                 message="Unexpected error during CJ API request",
+                error_code="CJ_REQUEST_ERROR",
                 details={"error": str(e), "endpoint": endpoint}
             )
+    
+    async def _make_rate_limited_request(
+        self,
+        method: str,
+        endpoint: str,
+        api_endpoint: APIEndpoint,
+        data: Optional[Dict] = None,
+        params: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """发送带频率限制的API请求"""
+        limiter = get_rate_limiter()
+        
+        try:
+            # 获取调用许可
+            await limiter.acquire(api_endpoint)
+            
+            # 执行API调用
+            result = await self._make_request(method, endpoint, data, params)
+            
+            # 报告成功
+            limiter.report_success(api_endpoint)
+            
+            return result
+            
+        except Exception as e:
+            # 报告失败
+            limiter.report_error(api_endpoint, str(e))
+            raise
+    
+    async def _get_access_token(self) -> str:
+        """获取访问令牌"""
+        try:
+            # 配置SSL验证
+            verify_ssl = self.ssl_cert_path if self.ssl_cert_path else self.verify_ssl
+            
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout),
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                verify=verify_ssl
+            ) as client:
+                response = await client.post(
+                    f"{self.base_url}/authentication/getAccessToken",
+                    json={
+                        "email": self.email,
+                        "password": self.api_key
+                    },
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                logger.info("CJ API response", status_code=response.status_code, response_text=response.text)
+                
+                if response.status_code != 200:
+                    raise CJAPIError(
+                        message=f"Failed to get access token: {response.status_code}",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"status_code": response.status_code, "response": response.text}
+                    )
+                
+                result = response.json()
+                logger.info("CJ API parsed response", result=result)
+                
+                if not result.get("result"):
+                    raise CJAPIError(
+                        message="Failed to get access token",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"response": result}
+                    )
+                
+                data = result.get("data", {})
+                access_token = data.get("accessToken")
+                refresh_token = data.get("refreshToken")
+                access_token_expiry = data.get("accessTokenExpiryDate")
+                
+                logger.info("CJ API token data", 
+                          access_token=access_token[:10] + "..." if access_token else None,
+                          refresh_token=refresh_token[:10] + "..." if refresh_token else None,
+                          expiry=access_token_expiry)
+                
+                if not access_token:
+                    raise CJAPIError(
+                        message="No access token in response",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"response": result}
+                    )
+                
+                # 设置token过期时间（15天）
+                self._access_token = access_token
+                self._refresh_token = refresh_token
+                
+                # 解析过期时间
+                if access_token_expiry:
+                    try:
+                        # 解析ISO格式的时间字符串
+                        expiry_dt = datetime.fromisoformat(access_token_expiry.replace('Z', '+00:00'))
+                        self._token_expires_at = expiry_dt
+                    except Exception as e:
+                        logger.warning("Failed to parse token expiry date", error=str(e), expiry=access_token_expiry)
+                        # 如果解析失败，使用默认15天
+                        from datetime import timezone
+                        self._token_expires_at = datetime.now(timezone.utc) + timedelta(days=15)
+                else:
+                    # 如果没有过期时间，使用默认15天
+                    from datetime import timezone
+                    self._token_expires_at = datetime.now(timezone.utc) + timedelta(days=15)
+                
+                logger.info("Successfully obtained CJ access token", 
+                          expires_at=self._token_expires_at.isoformat())
+                return access_token
+                
+        except Exception as e:
+            logger.error("Failed to get access token", error=str(e))
+            raise CJAPIError(
+                message="Failed to get access token",
+                error_code="CJ_AUTH_ERROR",
+                details={"error": str(e)}
+            )
+    
+    async def _refresh_access_token(self) -> str:
+        """使用refresh token刷新access token"""
+        try:
+            if not self._refresh_token:
+                raise CJAPIError(
+                    message="No refresh token available",
+                    error_code="CJ_AUTH_ERROR"
+                )
+            
+            # 配置SSL验证
+            verify_ssl = self.ssl_cert_path if self.ssl_cert_path else self.verify_ssl
+            
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout),
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                verify=verify_ssl
+            ) as client:
+                response = await client.post(
+                    f"{self.base_url}/authentication/refreshAccessToken",
+                    json={
+                        "refreshToken": self._refresh_token
+                    },
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                logger.info("CJ API refresh response", status_code=response.status_code, response_text=response.text)
+                
+                if response.status_code != 200:
+                    raise CJAPIError(
+                        message=f"Failed to refresh access token: {response.status_code}",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"status_code": response.status_code, "response": response.text}
+                    )
+                
+                result = response.json()
+                logger.info("CJ API refresh parsed response", result=result)
+                
+                if not result.get("result"):
+                    raise CJAPIError(
+                        message="Failed to refresh access token",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"response": result}
+                    )
+                
+                data = result.get("data", {})
+                access_token = data.get("accessToken")
+                refresh_token = data.get("refreshToken")
+                access_token_expiry = data.get("accessTokenExpiryDate")
+                
+                logger.info("CJ API refresh token data", 
+                          access_token=access_token[:10] + "..." if access_token else None,
+                          refresh_token=refresh_token[:10] + "..." if refresh_token else None,
+                          expiry=access_token_expiry)
+                
+                if not access_token:
+                    raise CJAPIError(
+                        message="No access token in refresh response",
+                        error_code="CJ_AUTH_ERROR",
+                        details={"response": result}
+                    )
+                
+                # 更新token
+                self._access_token = access_token
+                if refresh_token:
+                    self._refresh_token = refresh_token
+                
+                # 解析过期时间
+                if access_token_expiry:
+                    try:
+                        expiry_dt = datetime.fromisoformat(access_token_expiry.replace('Z', '+00:00'))
+                        self._token_expires_at = expiry_dt
+                    except Exception as e:
+                        logger.warning("Failed to parse refresh token expiry date", error=str(e), expiry=access_token_expiry)
+                        self._token_expires_at = datetime.now(timezone.utc) + timedelta(days=15)
+                else:
+                    self._token_expires_at = datetime.now(timezone.utc) + timedelta(days=15)
+                
+                logger.info("Successfully refreshed CJ access token", 
+                          expires_at=self._token_expires_at.isoformat())
+                return access_token
+                
+        except Exception as e:
+            logger.error("Failed to refresh access token", error=str(e))
+            raise CJAPIError(
+                message="Failed to refresh access token",
+                error_code="CJ_AUTH_ERROR",
+                details={"error": str(e)}
+            )
+    
+    async def _ensure_authenticated(self) -> None:
+        """确保已认证"""
+        from datetime import timezone
+        
+        # 如果已有有效token，直接返回
+        if self._access_token and self._token_expires_at and datetime.now(timezone.utc) < self._token_expires_at:
+            return
+        
+        # 清除过期token
+        self._access_token = None
+        self._token_expires_at = None
+        
+        # 优先尝试使用refresh token
+        if self._refresh_token:
+            try:
+                logger.info("Attempting to refresh access token...")
+                await self._refresh_access_token()
+                return
+            except Exception as e:
+                logger.warning("Failed to refresh token, will try getAccessToken", error=str(e))
+                # 如果refresh失败，清除refresh token
+                self._refresh_token = None
+        
+        # 如果refresh失败或没有refresh token，使用getAccessToken
+        logger.info("Getting new access token...")
+        await self._get_access_token()
     
     # 产品相关接口
     async def search_products(
@@ -298,15 +484,30 @@ class CJClient:
         if category_id:
             params["categoryId"] = category_id
             
-        return await self._make_request("GET", "/product/list", params=params)
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/product/list", 
+            APIEndpoint.PRODUCT_SEARCH, 
+            params=params
+        )
     
     async def get_product_detail(self, product_id: str) -> Dict[str, Any]:
         """获取产品详情"""
-        return await self._make_request("GET", f"/product/query", params={"pid": product_id})
+        return await self._make_rate_limited_request(
+            "GET", 
+            f"/product/query", 
+            APIEndpoint.PRODUCT_DETAIL, 
+            params={"pid": product_id}
+        )
     
     async def get_product_variants(self, product_id: str) -> Dict[str, Any]:
         """获取产品变体"""
-        return await self._make_request("GET", "/product/variant/query", params={"pid": product_id})
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/product/variant/query", 
+            APIEndpoint.PRODUCT_DETAIL, 
+            params={"pid": product_id}
+        )
     
     async def get_product_inventory(self, product_id: str, variant_id: Optional[str] = None) -> Dict[str, Any]:
         """获取产品库存"""
@@ -314,7 +515,12 @@ class CJClient:
         if variant_id:
             params["vid"] = variant_id
             
-        return await self._make_request("GET", "/product/inventory/query", params=params)
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/product/inventory/query", 
+            APIEndpoint.PRODUCT_INVENTORY, 
+            params=params
+        )
     
     # 订单相关接口
     async def create_order(
@@ -334,11 +540,21 @@ class CJClient:
         if remark:
             order_data["remark"] = remark
             
-        return await self._make_request("POST", "/shopping/order/createOrder", data=order_data)
+        return await self._make_rate_limited_request(
+            "POST", 
+            "/shopping/order/createOrder", 
+            APIEndpoint.ORDER_CREATE, 
+            data=order_data
+        )
     
     async def get_order_detail(self, order_id: str) -> Dict[str, Any]:
         """获取订单详情"""
-        return await self._make_request("GET", "/shopping/order/getOrderDetail", params={"orderId": order_id})
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/shopping/order/getOrderDetail", 
+            APIEndpoint.ORDER_DETAIL, 
+            params={"orderId": order_id}
+        )
     
     async def get_order_list(
         self,
@@ -361,20 +577,31 @@ class CJClient:
         if end_date:
             params["endDate"] = end_date
             
-        return await self._make_request("GET", "/shopping/order/getOrderList", params=params)
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/shopping/order/getOrderList", 
+            APIEndpoint.ORDER_LIST, 
+            params=params
+        )
     
     async def cancel_order(self, order_id: str, reason: str) -> Dict[str, Any]:
         """取消订单"""
-        return await self._make_request(
+        return await self._make_rate_limited_request(
             "POST",
             "/shopping/order/cancelOrder",
+            APIEndpoint.ORDER_CANCEL,
             data={"orderId": order_id, "reason": reason}
         )
     
     # 物流相关接口
     async def get_shipping_methods(self, country_code: str) -> Dict[str, Any]:
         """获取物流方式"""
-        return await self._make_request("GET", "/logistic/getLogisticList", params={"countryCode": country_code})
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/logistic/getLogisticList", 
+            APIEndpoint.SHIPPING_METHODS, 
+            params={"countryCode": country_code}
+        )
     
     async def get_shipping_cost(
         self,
@@ -391,24 +618,39 @@ class CJClient:
         if province:
             data["province"] = province
             
-        return await self._make_request("POST", "/logistic/freightCalculate", data=data)
+        return await self._make_rate_limited_request(
+            "POST", 
+            "/logistic/freightCalculate", 
+            APIEndpoint.SHIPPING_COST, 
+            data=data
+        )
     
     async def get_tracking_info(self, order_id: str) -> Dict[str, Any]:
         """获取物流跟踪信息"""
-        return await self._make_request("GET", "/logistic/getTrackNumber", params={"orderId": order_id})
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/logistic/getTrackNumber", 
+            APIEndpoint.TRACKING_INFO, 
+            params={"orderId": order_id}
+        )
     
     async def track_package(self, tracking_number: str, carrier: str) -> Dict[str, Any]:
         """跟踪包裹"""
-        return await self._make_request(
+        return await self._make_rate_limited_request(
             "GET",
             "/logistic/trackPackage",
+            APIEndpoint.TRACKING_INFO,
             params={"trackingNumber": tracking_number, "carrier": carrier}
         )
     
     # 其他接口
     async def get_categories(self) -> Dict[str, Any]:
         """获取商品分类"""
-        return await self._make_request("GET", "/product/getCategory")
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/product/getCategory", 
+            APIEndpoint.CATEGORIES
+        )
     
     async def get_popular_categories(self, limit: int = 10) -> List[Dict[str, Any]]:
         """获取热门分类（产品数量最多的分类）"""
@@ -461,11 +703,20 @@ class CJClient:
     
     async def get_countries(self) -> Dict[str, Any]:
         """获取支持的国家列表"""
-        return await self._make_request("GET", "/support/getCountry")
+        return await self._make_rate_limited_request(
+            "GET", 
+            "/support/getCountry", 
+            APIEndpoint.COUNTRIES
+        )
     
     async def validate_address(self, address: CJShippingAddress) -> Dict[str, Any]:
         """验证收货地址"""
-        return await self._make_request("POST", "/support/validateAddress", data=address.dict())
+        return await self._make_rate_limited_request(
+            "POST", 
+            "/support/validateAddress", 
+            APIEndpoint.ADDRESS_VALIDATE, 
+            data=address.dict()
+        )
 
 
 # 全局CJ客户端实例

@@ -3,6 +3,7 @@ Magento-CJ Dropshipping 中台服务主应用
 """
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -12,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -46,7 +48,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
     """Prometheus监控中间件"""
     
     async def dispatch(self, request: Request, call_next):
-        start_time = REQUEST_DURATION.time()
+        start_time = time.time()
         
         try:
             response = await call_next(request)
@@ -67,7 +69,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             ).inc()
             raise
         finally:
-            start_time.observe()
+            REQUEST_DURATION.observe(time.time() - start_time)
 
 
 @asynccontextmanager
@@ -224,9 +226,25 @@ def create_app() -> FastAPI:
             }
         )
     
+    # 根路径 - 提供Web界面
+    @app.get("/")
+    async def root():
+        try:
+            with open("app/static/index.html", "r", encoding="utf-8") as f:
+                html_content = f.read()
+            return Response(content=html_content, media_type="text/html")
+        except FileNotFoundError:
+            return {"message": "Magento-CJ Middleware API", "version": "1.0.0"}
+    
     # 注册路由
     app.include_router(health_router, prefix="/health", tags=["Health"])
     app.include_router(api_router, prefix="/api/v1")
+    
+    # 静态文件服务
+    try:
+        app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    except Exception as e:
+        logger.warning("静态文件目录不存在，跳过静态文件服务", error=str(e))
     
     # Prometheus指标端点
     @app.get("/metrics")

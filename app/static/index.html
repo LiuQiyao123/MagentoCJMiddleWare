@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magento-CJ 商品同步工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .history {
+            margin-top: 40px;
+            border-top: 1px solid #e1e5e9;
+            padding-top: 30px;
+        }
+
+        .history h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .history-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .history-item.success {
+            border-left-color: #28a745;
+        }
+
+        .history-item.error {
+            border-left-color: #dc3545;
+        }
+
+        .url-preview {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            word-break: break-all;
+            display: none;
+        }
+
+        .product-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .product-info h4 {
+            margin-bottom: 10px;
+            color: #0c5460;
+        }
+
+        .product-info p {
+            margin-bottom: 5px;
+        }
+
+        .copy-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛍️ Magento-CJ 商品同步工具</h1>
+            <p>快速将CJ Dropshipping商品同步到Magento商店</p>
+        </div>
+
+        <div class="content">
+            <form id="syncForm">
+                <div class="form-group">
+                    <label for="cjUrl">CJ商品链接</label>
+                    <textarea 
+                        id="cjUrl" 
+                        name="cjUrl" 
+                        rows="3" 
+                        placeholder="请粘贴CJ Dropshipping商品链接，例如：https://www.cjdropshipping.com/product/...-p-1744230344494157824.html"
+                        required
+                    ></textarea>
+                    <div id="urlPreview" class="url-preview"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="productName">商品名称（可选）</label>
+                    <input 
+                        type="text" 
+                        id="productName" 
+                        name="productName" 
+                        placeholder="输入商品名称，如果不填写将自动获取"
+                    >
+                </div>
+
+                <button type="submit" class="btn" id="syncBtn">
+                    🔄 开始同步
+                </button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在同步商品，请稍候...</p>
+            </div>
+
+            <div class="result" id="result"></div>
+
+            <div class="product-info" id="productInfo">
+                <h4>📦 商品信息</h4>
+                <div id="productDetails"></div>
+            </div>
+
+            <div class="history">
+                <h3>📋 同步历史</h3>
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ProductSyncTool {
+            constructor() {
+                this.form = document.getElementById('syncForm');
+                this.urlInput = document.getElementById('cjUrl');
+                this.nameInput = document.getElementById('productName');
+                this.syncBtn = document.getElementById('syncBtn');
+                this.loading = document.getElementById('loading');
+                this.result = document.getElementById('result');
+                this.productInfo = document.getElementById('productInfo');
+                this.productDetails = document.getElementById('productDetails');
+                this.historyList = document.getElementById('historyList');
+                this.urlPreview = document.getElementById('urlPreview');
+
+                this.init();
+            }
+
+            init() {
+                this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+                this.urlInput.addEventListener('input', () => this.handleUrlInput());
+                this.loadHistory();
+            }
+
+            handleUrlInput() {
+                const url = this.urlInput.value.trim();
+                if (url) {
+                    this.urlPreview.textContent = url;
+                    this.urlPreview.style.display = 'block';
+                } else {
+                    this.urlPreview.style.display = 'none';
+                }
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+                
+                const url = this.urlInput.value.trim();
+                const name = this.nameInput.value.trim();
+
+                if (!url) {
+                    this.showResult('请输入CJ商品链接', 'error');
+                    return;
+                }
+
+                this.setLoading(true);
+                this.hideResult();
+
+                try {
+                    const response = await fetch('/api/v1/products/sync/single', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            product_url: url,
+                            product_name: name || undefined
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showResult('✅ 商品同步成功！', 'success');
+                        this.showProductInfo(data);
+                        this.addToHistory(url, data, 'success');
+                    } else {
+                        this.showResult(`❌ 同步失败: ${data.error}`, 'error');
+                        this.addToHistory(url, data, 'error');
+                    }
+                } catch (error) {
+                    console.error('同步错误:', error);
+                    this.showResult(`❌ 网络错误: ${error.message}`, 'error');
+                    this.addToHistory(url, { error: error.message }, 'error');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            setLoading(loading) {
+                this.syncBtn.disabled = loading;
+                this.loading.style.display = loading ? 'block' : 'none';
+            }
+
+            showResult(message, type) {
+                this.result.textContent = message;
+                this.result.className = `result ${type}`;
+                this.result.style.display = 'block';
+            }
+
+            hideResult() {
+                this.result.style.display = 'none';
+            }
+
+            showProductInfo(data) {
+                this.productDetails.innerHTML = `
+                    <p><strong>商品名称:</strong> ${data.product_name || 'N/A'}</p>
+                    <p><strong>Magento商品ID:</strong> ${data.magento_product_id || 'N/A'}</p>
+                    <p><strong>SKU:</strong> ${data.sku || 'N/A'}</p>
+                    <p><strong>Magento链接:</strong> 
+                        ${data.magento_url ? 
+                            `<a href="${data.magento_url}" target="_blank">${data.magento_url}</a>
+                             <button class="copy-btn" onclick="navigator.clipboard.writeText('${data.magento_url}')">复制</button>` 
+                            : 'N/A'}
+                    </p>
+                `;
+                this.productInfo.style.display = 'block';
+            }
+
+            addToHistory(url, data, status) {
+                const history = this.getHistory();
+                const item = {
+                    url: url,
+                    data: data,
+                    status: status,
+                    timestamp: new Date().toISOString()
+                };
+                
+                history.unshift(item);
+                if (history.length > 10) {
+                    history.pop();
+                }
+                
+                localStorage.setItem('syncHistory', JSON.stringify(history));
+                this.loadHistory();
+            }
+
+            getHistory() {
+                const history = localStorage.getItem('syncHistory');
+                return history ? JSON.parse(history) : [];
+            }
+
+            loadHistory() {
+                const history = this.getHistory();
+                this.historyList.innerHTML = '';
+
+                if (history.length === 0) {
+                    this.historyList.innerHTML = '<p style="color: #6c757d; text-align: center;">暂无同步历史</p>';
+                    return;
+                }
+
+                history.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `history-item ${item.status}`;
+                    
+                    const date = new Date(item.timestamp).toLocaleString('zh-CN');
+                    const url = item.url.length > 50 ? item.url.substring(0, 50) + '...' : item.url;
+                    
+                    div.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${item.status === 'success' ? '✅' : '❌'} ${date}</strong>
+                                <br>
+                                <small style="color: #6c757d;">${url}</small>
+                            </div>
+                            <button class="copy-btn" onclick="navigator.clipboard.writeText('${item.url}')">复制链接</button>
+                        </div>
+                    `;
+                    
+                    this.historyList.appendChild(div);
+                });
+            }
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            new ProductSyncTool();
+        });
+    </script>
+</body>
+</html> 

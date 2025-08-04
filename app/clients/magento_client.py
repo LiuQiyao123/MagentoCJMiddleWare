@@ -8,6 +8,7 @@ from datetime import datetime
 import httpx
 import structlog
 from pydantic import BaseModel, Field
+from requests_oauthlib import OAuth1
 
 from app.config.settings import get_settings
 from app.core.exceptions import APIException
@@ -52,11 +53,14 @@ class MagentoClient:
     
     def __init__(self):
         self.base_url = settings.MAGENTO_BASE_URL
-        self.api_token = settings.MAGENTO_API_TOKEN
-        self.api_user = settings.MAGENTO_API_USER
-        self.api_password = settings.MAGENTO_API_PASSWORD
+        self.consumer_key = settings.MAGENTO_CONSUMER_KEY
+        self.consumer_secret = settings.MAGENTO_CONSUMER_SECRET
+        self.access_token = settings.MAGENTO_ACCESS_TOKEN
+        self.access_token_secret = settings.MAGENTO_ACCESS_TOKEN_SECRET
         self.timeout = settings.MAGENTO_TIMEOUT
         self.max_retries = settings.MAGENTO_MAX_RETRIES
+        self.verify_ssl = settings.VERIFY_SSL
+        self.ssl_cert_path = settings.SSL_CERT_PATH
         
         self._client: Optional[httpx.AsyncClient] = None
         
@@ -72,9 +76,13 @@ class MagentoClient:
     async def initialize(self) -> None:
         """初始化客户端"""
         try:
+            # 配置SSL验证
+            verify_ssl = self.ssl_cert_path if self.ssl_cert_path else self.verify_ssl
+            
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),
-                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                verify=verify_ssl
             )
             
             # 测试连接
@@ -85,8 +93,8 @@ class MagentoClient:
         except Exception as e:
             logger.error("Failed to initialize Magento API client", error=str(e))
             raise MagentoAPIError(
-                error_code="MAGENTO_INIT_ERROR",
                 message="Failed to initialize Magento API client",
+                error_code="MAGENTO_INIT_ERROR",
                 details={"error": str(e)}
             )
     
@@ -100,14 +108,14 @@ class MagentoClient:
         """测试连接"""
         try:
             response = await self._client.get(
-                f"{self.base_url}/rest/V1/store/storeConfigs",
+                f"{self.base_url}/rest/V1/directory/countries",
                 headers=self._get_headers()
             )
             
             if response.status_code != 200:
                 raise MagentoAPIError(
-                    error_code="MAGENTO_CONNECTION_ERROR",
                     message="Failed to connect to Magento API",
+                    error_code="MAGENTO_CONNECTION_ERROR",
                     details={"status_code": response.status_code}
                 )
             
@@ -116,18 +124,46 @@ class MagentoClient:
         except httpx.RequestError as e:
             logger.error("Magento API connection test failed", error=str(e))
             raise MagentoAPIError(
-                error_code="MAGENTO_NETWORK_ERROR",
                 message="Network error during Magento API connection test",
+                error_code="MAGENTO_NETWORK_ERROR",
                 details={"error": str(e)}
             )
     
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头"""
         return {
-            "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+    
+    def _get_oauth_headers(self, method: str, url: str, data: Optional[Dict] = None) -> Dict[str, str]:
+        """获取OAuth认证头"""
+        oauth = OAuth1(
+            client_key=self.consumer_key,
+            client_secret=self.consumer_secret,
+            resource_owner_key=self.access_token,
+            resource_owner_secret=self.access_token_secret
+        )
+        
+        # 使用requests库生成OAuth签名
+        import requests
+        from urllib.parse import urlencode
+        
+        # 准备请求数据
+        if data:
+            body = requests.utils.json.dumps(data)
+        else:
+            body = ""
+        
+        # 生成OAuth签名
+        oauth_request = oauth.sign(
+            method=method,
+            url=url,
+            body=body,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        return dict(oauth_request.headers)
     
     async def _make_request(
         self,
@@ -141,18 +177,22 @@ class MagentoClient:
         try:
             url = f"{self.base_url}/rest/V1/{endpoint.lstrip('/')}"
             
+            # 获取OAuth认证头
+            oauth_headers = self._get_oauth_headers(method, url, data)
+            headers = {**self._get_headers(), **oauth_headers}
+            
             response = await self._client.request(
                 method=method,
                 url=url,
                 json=data,
                 params=params,
-                headers=self._get_headers()
+                headers=headers
             )
             
             if response.status_code not in [200, 201]:
                 raise MagentoAPIError(
-                    error_code="MAGENTO_REQUEST_ERROR",
                     message=f"Magento API request failed with status {response.status_code}",
+                    error_code="MAGENTO_REQUEST_ERROR",
                     details={
                         "status_code": response.status_code,
                         "response": response.text,
@@ -169,8 +209,8 @@ class MagentoClient:
             
             logger.error("Magento API network error", error=str(e), endpoint=endpoint)
             raise MagentoAPIError(
-                error_code="MAGENTO_NETWORK_ERROR",
                 message="Network error during Magento API request",
+                error_code="MAGENTO_NETWORK_ERROR",
                 details={"error": str(e), "endpoint": endpoint}
             )
         except MagentoAPIError:
@@ -178,8 +218,8 @@ class MagentoClient:
         except Exception as e:
             logger.error("Magento API request error", error=str(e), endpoint=endpoint)
             raise MagentoAPIError(
-                error_code="MAGENTO_REQUEST_ERROR",
                 message="Unexpected error during Magento API request",
+                error_code="MAGENTO_REQUEST_ERROR",
                 details={"error": str(e), "endpoint": endpoint}
             )
     

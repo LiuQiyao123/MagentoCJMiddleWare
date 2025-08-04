@@ -40,8 +40,8 @@ class ProductSyncService:
         except Exception as e:
             logger.error("Failed to initialize product sync service", error=str(e))
             raise ProductSyncError(
-                error_code="SYNC_INIT_ERROR",
                 message="Failed to initialize product sync service",
+                error_code="SYNC_INIT_ERROR",
                 details={"error": str(e)}
             )
     
@@ -123,8 +123,8 @@ class ProductSyncService:
         except Exception as e:
             logger.error("CJ product sync failed", error=str(e))
             raise ProductSyncError(
-                error_code="CJ_SYNC_ERROR",
                 message="Failed to sync products from CJ",
+                error_code="CJ_SYNC_ERROR",
                 details={"error": str(e)}
             )
     
@@ -330,8 +330,8 @@ class ProductSyncService:
         except Exception as e:
             logger.error("Inventory sync failed", error=str(e))
             raise ProductSyncError(
-                error_code="INVENTORY_SYNC_ERROR",
                 message="Failed to sync inventory from CJ",
+                error_code="INVENTORY_SYNC_ERROR",
                 details={"error": str(e)}
             )
     
