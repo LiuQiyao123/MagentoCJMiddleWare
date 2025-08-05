@@ -26,7 +26,7 @@ def start_api_server():
         sys.executable, "-m", "uvicorn",
         "app.main:app",
         "--host", "0.0.0.0",
-        "--port", "8000",
+        "--port", "3000",
         "--reload",
         "--log-level", "info"
     ]

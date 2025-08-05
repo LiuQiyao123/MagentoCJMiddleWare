@@ -84,12 +84,12 @@ class Settings(BaseSettings):
         default="https://developers.cjdropshipping.com/api2.0/v1",
         description="CJ API基础URL"
     )
+    CJ_API_EMAIL: str = Field(description="CJ API邮箱")
     CJ_API_KEY: str = Field(description="CJ API Key")
     CJ_TIMEOUT: int = Field(default=30, description="CJ API超时时间")
     CJ_MAX_RETRIES: int = Field(default=3, description="CJ API最大重试次数")
     
     # 兼容旧配置
-    CJ_API_EMAIL: Optional[str] = Field(default=None, description="CJ API邮箱 (兼容)")
     CJ_API_PASSWORD: Optional[str] = Field(default=None, description="CJ API密码 (兼容)")
     CJ_API_SECRET: Optional[str] = Field(default=None, description="CJ API Secret (兼容)")
     

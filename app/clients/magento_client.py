@@ -76,8 +76,8 @@ class MagentoClient:
     async def initialize(self) -> None:
         """初始化客户端"""
         try:
-            # 配置SSL验证
-            verify_ssl = self.ssl_cert_path if self.ssl_cert_path else self.verify_ssl
+            # 配置SSL验证 - 如果SSL证书有问题，可以禁用验证
+            verify_ssl = False if not self.verify_ssl else (self.ssl_cert_path if self.ssl_cert_path else True)
             
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),

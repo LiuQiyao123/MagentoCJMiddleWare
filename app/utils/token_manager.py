@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_db
 from app.models.token import TokenStorage
-from app.clients.cj_client import CJClient
+# 延迟导入以避免循环导入
+# from app.clients.cj_client import CJClient
 from app.core.exceptions import APIException
 
 logger = structlog.get_logger(__name__)
@@ -44,7 +45,7 @@ class CJTokenManager:
     """CJ API Token管理器"""
     
     def __init__(self):
-        self.cj_client: Optional[CJClient] = None
+        self.cj_client: Optional[Any] = None  # 使用Any避免循环导入
         self._token_info: Optional[TokenInfo] = None
         self._last_check_time = 0
         self._check_interval = 300  # 5分钟检查一次
@@ -62,6 +63,8 @@ class CJTokenManager:
     async def initialize(self) -> None:
         """初始化Token管理器"""
         if not self.cj_client:
+            # 延迟导入以避免循环导入
+            from app.clients.cj_client import CJClient
             self.cj_client = CJClient()
             await self.cj_client.initialize()
         

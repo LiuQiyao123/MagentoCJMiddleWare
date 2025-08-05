@@ -144,7 +144,7 @@ class ProductSyncService:
             magento_product = self._build_magento_product(product_data, variant_data)
             
             # 检查产品是否已存在映射
-            async for session in get_db():
+            async with get_db() as session:
                 stmt = select(ProductMapping).where(
                     ProductMapping.cj_product_id == product_id
                 )
@@ -196,7 +196,7 @@ class ProductSyncService:
                 
         except Exception as e:
             # 记录失败日志
-            async for session in get_db():
+            async with get_db() as session:
                 await self._log_sync_operation(
                     session,
                     SyncType.PRODUCT_SYNC,
@@ -279,7 +279,7 @@ class ProductSyncService:
         try:
             # 如果没有指定产品映射，获取所有已同步的产品
             if not product_mappings:
-                async for session in get_db():
+                async with get_db() as session:
                     stmt = select(ProductMapping).where(
                         ProductMapping.sync_status == SyncStatus.SYNCED
                     )
@@ -358,13 +358,17 @@ class ProductSyncService:
         try:
             logger.info("开始同步单个商品", product_id=product_id)
             
+            # 确保客户端已初始化
+            if not self.cj_client or not self.magento_client:
+                await self.initialize()
+            
             # 1. 从CJ获取商品详情
             cj_product = await self.cj_client.get_product_detail(product_id)
             if not cj_product:
                 raise ValueError(f"商品不存在: {product_id}")
             
             # 2. 转换为Magento格式
-            magento_product_data = self._build_magento_product(cj_product)
+            magento_product_data = self._build_magento_product(cj_product, [])
             
             # 3. 创建Magento产品
             magento_result = await self.magento_client.create_product(magento_product_data)
@@ -388,10 +392,10 @@ class ProductSyncService:
                        duration_ms=sync_duration)
             
             return {
-                "product_name": cj_product.get("name"),
+                "product_name": cj_product.get("data", {}).get("productName"),
                 "magento_id": magento_result.get("id"),
                 "sku": magento_product_data.get("sku"),
-                "magento_url": f"{self.settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
+                "magento_url": f"{get_settings().MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
             }
             
         except Exception as e:

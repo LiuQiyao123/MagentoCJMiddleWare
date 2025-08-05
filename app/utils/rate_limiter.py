@@ -14,6 +14,7 @@ logger = structlog.get_logger(__name__)
 
 class APIEndpoint(Enum):
     """API接口类型枚举"""
+    AUTH_TOKEN = "auth_token"  # 获取访问令牌（每5分钟1次）
     PRODUCT_SEARCH = "product_search"
     PRODUCT_DETAIL = "product_detail"
     PRODUCT_INVENTORY = "product_inventory"
@@ -33,8 +34,23 @@ class CJRateLimiter:
     """CJ API频率限制器"""
     
     def __init__(self):
-        # 每日限制
-        self.daily_limit = 1000
+        # 每日限制 - 每个接口1000次/天
+        self.daily_limits = {
+            APIEndpoint.AUTH_TOKEN: 288,  # 每5分钟1次 = 288次/天
+            APIEndpoint.PRODUCT_SEARCH: 1000,
+            APIEndpoint.PRODUCT_DETAIL: 1000,
+            APIEndpoint.PRODUCT_INVENTORY: 1000,
+            APIEndpoint.ORDER_CREATE: 1000,
+            APIEndpoint.ORDER_DETAIL: 1000,
+            APIEndpoint.ORDER_LIST: 1000,
+            APIEndpoint.ORDER_CANCEL: 1000,
+            APIEndpoint.SHIPPING_METHODS: 1000,
+            APIEndpoint.SHIPPING_COST: 1000,
+            APIEndpoint.TRACKING_INFO: 1000,
+            APIEndpoint.CATEGORIES: 1000,
+            APIEndpoint.COUNTRIES: 1000,
+            APIEndpoint.ADDRESS_VALIDATE: 1000,
+        }
         
         # 最小调用间隔（秒）
         self.min_interval = 2.0
@@ -57,7 +73,7 @@ class CJRateLimiter:
         self.max_errors = 5  # 连续错误5次后增加间隔
         
         logger.info("CJ Rate Limiter initialized", 
-                   daily_limit=self.daily_limit,
+                   daily_limits=self.daily_limits,
                    min_interval=self.min_interval)
     
     def _get_daily_reset_time(self) -> datetime:
@@ -104,13 +120,13 @@ class CJRateLimiter:
         current_time = time.time()
         last_call = self.last_call_time.get(endpoint, 0)
         
-        # 基础间隔
-        wait_time = max(0, last_call + self.current_interval - current_time)
-        
-        # 如果接近每日限制，增加间隔
-        total_calls = self._get_total_daily_calls()
-        if total_calls > self.daily_limit * 0.8:  # 超过80%时增加间隔
-            wait_time += 2.0
+        # 根据接口类型计算等待时间
+        if endpoint == APIEndpoint.AUTH_TOKEN:
+            # 获取访问令牌：每5分钟只能调用1次
+            wait_time = max(0, last_call + 300.0 - current_time)  # 300秒 = 5分钟
+        else:
+            # 其他接口使用基础间隔
+            wait_time = max(0, last_call + self.current_interval - current_time)
         
         return wait_time
     
@@ -137,23 +153,7 @@ class CJRateLimiter:
         if self._should_reset_daily_count():
             self._reset_daily_count()
         
-        # 检查是否超过每日限制
-        total_calls = self._get_total_daily_calls()
-        if total_calls >= self.daily_limit:
-            # 计算到下一个重置时间的等待时间
-            now = datetime.utcnow()
-            wait_seconds = (self.daily_reset_time - now).total_seconds()
-            
-            logger.warning("Daily limit exceeded", 
-                          total_calls=total_calls,
-                          daily_limit=self.daily_limit,
-                          wait_seconds=wait_seconds)
-            
-            if wait_seconds > 0:
-                await asyncio.sleep(wait_seconds)
-                self._reset_daily_count()
-        
-        # 计算需要等待的时间
+        # 计算需要等待的时间（只检查间隔，不检查每日限制）
         wait_time = self._calculate_wait_time(endpoint)
         if wait_time > 0:
             logger.debug("Rate limiting", 
@@ -167,7 +167,7 @@ class CJRateLimiter:
         
         logger.debug("API call permitted", 
                     endpoint=endpoint.value,
-                    total_calls=self._get_total_daily_calls())
+                    current_calls=self.daily_call_count.get(endpoint, 0))
     
     def report_success(self, endpoint: APIEndpoint) -> None:
         """报告调用成功"""
@@ -183,13 +183,21 @@ class CJRateLimiter:
     
     def get_status(self) -> Dict[str, Any]:
         """获取限制器状态"""
+        endpoint_status = {}
+        for endpoint, limit in self.daily_limits.items():
+            current_calls = self.daily_call_count.get(endpoint, 0)
+            endpoint_status[endpoint.value] = {
+                "current_calls": current_calls,
+                "limit": limit,
+                "remaining": max(0, limit - current_calls)
+            }
+        
         return {
-            "daily_limit": self.daily_limit,
+            "daily_limits": self.daily_limits,
             "total_calls_today": self._get_total_daily_calls(),
-            "calls_remaining": max(0, self.daily_limit - self._get_total_daily_calls()),
             "current_interval": self.current_interval,
             "daily_reset_time": self.daily_reset_time.isoformat() if self.daily_reset_time else None,
-            "endpoint_calls": self.daily_call_count.copy(),
+            "endpoint_status": endpoint_status,
             "error_count": self.error_count
         }
 
