@@ -9,6 +9,7 @@ import httpx
 import structlog
 from pydantic import BaseModel, Field
 from requests_oauthlib import OAuth1
+import requests
 
 from app.config.settings import get_settings
 from app.core.exceptions import APIException
@@ -137,33 +138,13 @@ class MagentoClient:
         }
     
     def _get_oauth_headers(self, method: str, url: str, data: Optional[Dict] = None) -> Dict[str, str]:
-        """获取OAuth认证头"""
-        oauth = OAuth1(
-            client_key=self.consumer_key,
-            client_secret=self.consumer_secret,
-            resource_owner_key=self.access_token,
-            resource_owner_secret=self.access_token_secret
-        )
-        
-        # 使用requests库生成OAuth签名
-        import requests
-        from urllib.parse import urlencode
-        
-        # 准备请求数据
-        if data:
-            body = requests.utils.json.dumps(data)
-        else:
-            body = ""
-        
-        # 生成OAuth签名
-        oauth_request = oauth.sign(
-            method=method,
-            url=url,
-            body=body,
-            headers={"Content-Type": "application/json"}
-        )
-        
-        return dict(oauth_request.headers)
+        """获取认证头"""
+        # 使用Bearer Token认证（Magento 2.4+推荐方式）
+        return {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
     
     async def _make_request(
         self,
@@ -181,10 +162,16 @@ class MagentoClient:
             oauth_headers = self._get_oauth_headers(method, url, data)
             headers = {**self._get_headers(), **oauth_headers}
             
+            # 准备请求数据
+            if data:
+                request_data = {"product": data} if "product" not in data else data
+            else:
+                request_data = None
+            
             response = await self._client.request(
                 method=method,
                 url=url,
-                json=data,
+                json=request_data,
                 params=params,
                 headers=headers
             )

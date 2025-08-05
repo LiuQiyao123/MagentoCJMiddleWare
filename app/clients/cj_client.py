@@ -137,6 +137,9 @@ class CJClient:
                 verify=verify_ssl
             )
             
+            # 加载缓存的token
+            self._load_cached_token()
+            
             logger.info("CJ API client initialized successfully")
             
         except Exception as e:
@@ -156,9 +159,8 @@ class CJClient:
     def _get_token_cache_file(self) -> str:
         """获取token缓存文件路径"""
         import os
-        # 使用绝对路径，确保在任何环境下都能正确创建
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname(current_dir))
+        # 使用项目根目录下的cache文件夹
+        project_root = os.getcwd()  # 使用当前工作目录作为项目根目录
         cache_dir = os.path.join(project_root, "cache")
         
         try:
@@ -734,12 +736,34 @@ class CJClient:
     
     async def get_product_detail(self, product_id: str) -> Dict[str, Any]:
         """获取产品详情"""
-        return await self._make_rate_limited_request(
-            "GET", 
-            f"/product/query", 
-            APIEndpoint.PRODUCT_DETAIL, 
-            params={"pid": product_id}
-        )
+        await self._ensure_authenticated()
+        
+        async with self._client as client:
+            response = await client.get(
+                f"{self.base_url}/product/query",
+                params={"pid": product_id},
+                headers={
+                    "CJ-Access-Token": self._access_token,  # 使用CJ API文档指定的header格式
+                    "Content-Type": "application/json"
+                }
+            )
+            
+            if response.status_code != 200:
+                raise CJAPIError(
+                    message=f"获取产品详情失败: {response.status_code}",
+                    error_code="CJ_PRODUCT_DETAIL_ERROR",
+                    details={"status_code": response.status_code, "response": response.text}
+                )
+            
+            result = response.json()
+            if not result.get("result"):
+                raise CJAPIError(
+                    message="产品详情API返回错误",
+                    error_code="CJ_PRODUCT_DETAIL_ERROR",
+                    details={"response": result}
+                )
+            
+            return result.get("data", {})
     
     async def get_product_variants(self, product_id: str) -> Dict[str, Any]:
         """获取产品变体"""

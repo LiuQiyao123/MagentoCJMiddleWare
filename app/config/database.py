@@ -31,10 +31,9 @@ class DatabaseManager:
     async def initialize(self) -> None:
         """初始化数据库连接"""
         try:
-            # 创建异步引擎
+            # 创建异步引擎（使用默认pool配置）
             self.async_engine = create_async_engine(
                 settings.database_url,
-                poolclass=QueuePool,
                 pool_size=settings.DB_POOL_SIZE,
                 max_overflow=settings.DB_MAX_OVERFLOW,
                 pool_pre_ping=True,
