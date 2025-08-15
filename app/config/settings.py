@@ -10,40 +10,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """应用配置类"""
+    """应用配置"""
+    # 应用信息
+    APP_NAME: str = "CJ Magento Middleware"
+    APP_VERSION: str = "0.1.0"
+    DEBUG: bool = False
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="ignore"
-    )
-    
-    # 应用基础配置
-    APP_NAME: str = Field(default="Magento-CJ-Middleware", description="应用名称")
-    APP_VERSION: str = Field(default="1.0.0", description="应用版本")
-    DEBUG: bool = Field(default=False, description="调试模式")
-    HOST: str = Field(default="0.0.0.0", description="服务器地址")
-    PORT: int = Field(default=3000, description="服务器端口")
-    
-    # 安全配置
-    SECRET_KEY: str = Field(description="应用密钥")
-    JWT_SECRET: str = Field(description="JWT密钥")
-    JWT_EXPIRES_IN: str = Field(default="24h", description="JWT过期时间")
-    
-    # CORS配置
-    ALLOWED_ORIGINS: List[str] = Field(
-        default=["http://localhost", "http://127.0.0.1"],
-        description="允许的跨域源"
-    )
-    ALLOWED_HOSTS: List[str] = Field(
-        default=["localhost", "127.0.0.1"],
-        description="允许的主机"
-    )
-    
+    # 加密密钥
+    SECRET_KEY: str
+
     # 数据库配置
-    DB_HOST: str = Field(default="localhost", description="数据库主机")
-    DB_PORT: int = Field(default=3306, description="数据库端口")
+    DB_HOST: str
+    DB_PORT: int
     DB_NAME: str = Field(default="magento_cj_middleware", description="数据库名称")
     DB_USER: str = Field(default="root", description="数据库用户")
     DB_PASSWORD: str = Field(description="数据库密码")
@@ -72,6 +50,9 @@ class Settings(BaseSettings):
     MAGENTO_ACCESS_TOKEN_SECRET: str = Field(description="Magento Access Token Secret")
     MAGENTO_TIMEOUT: int = Field(default=30, description="Magento API超时时间")
     MAGENTO_MAX_RETRIES: int = Field(default=3, description="Magento API最大重试次数")
+    MAGENTO_ADMIN_USERNAME: Optional[str] = Field(default=None, description="用于自动刷新Token的管理员用户名")
+    MAGENTO_ADMIN_PASSWORD: Optional[str] = Field(default=None, description="用于自动刷新Token的管理员密码")
+    MAGENTO_STORE_CODE: str = Field(default="default", description="REST调用使用的Store View代码")
     
     # 兼容旧配置
     MAGENTO_CONSUMER_KEY: Optional[str] = Field(default=None, description="Magento Consumer Key (兼容)")

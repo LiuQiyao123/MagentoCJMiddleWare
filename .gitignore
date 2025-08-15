@@ -27,6 +27,7 @@ wheels/
 *.egg
 
 # 虚拟环境
+.venv/
 venv/
 env/
 ENV/
@@ -54,18 +55,4 @@ Thumbs.db
 
 # 临时文件
 *.tmp
-*.temp
-
-# 临时脚本和测试文件
-test_*.py
-*_test.py
-*_setup.md
-*_optimization.md
-*_testing.md
-sync_*.py
-temp_*.py
-
-# 临时文档
-TEMP_*.md
-*_GUIDE.md
-*_SETUP.md 
+*.temp 

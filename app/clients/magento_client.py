@@ -62,6 +62,9 @@ class MagentoClient:
         self.max_retries = settings.MAGENTO_MAX_RETRIES
         self.verify_ssl = settings.VERIFY_SSL
         self.ssl_cert_path = settings.SSL_CERT_PATH
+        self.admin_username = settings.MAGENTO_ADMIN_USERNAME
+        self.admin_password = settings.MAGENTO_ADMIN_PASSWORD
+        self.store_code = settings.MAGENTO_STORE_CODE or "default"
         
         self._client: Optional[httpx.AsyncClient] = None
         
@@ -145,6 +148,36 @@ class MagentoClient:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+
+    async def _refresh_admin_token(self) -> None:
+        """使用管理员账号刷新Bearer Token"""
+        if not self.admin_username or not self.admin_password:
+            raise MagentoAPIError(
+                message="Admin credentials not configured for token refresh",
+                error_code="MAGENTO_TOKEN_REFRESH_NOT_CONFIGURED",
+                details=None,
+            )
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout), verify=self.verify_ssl) as client:
+                resp = await client.post(
+                    f"{self.base_url}/rest/V1/integration/admin/token",
+                    json={"username": self.admin_username, "password": self.admin_password},
+                )
+                if resp.status_code != 200:
+                    raise MagentoAPIError(
+                        message=f"Failed to refresh admin token: {resp.status_code}",
+                        error_code="MAGENTO_TOKEN_REFRESH_FAILED",
+                        details={"status_code": resp.status_code, "response": resp.text},
+                    )
+                self.access_token = resp.json()
+        except MagentoAPIError:
+            raise
+        except Exception as e:
+            raise MagentoAPIError(
+                message="Unexpected error refreshing admin token",
+                error_code="MAGENTO_TOKEN_REFRESH_ERROR",
+                details={"error": str(e)},
+            )
     
     async def _make_request(
         self,
@@ -156,7 +189,7 @@ class MagentoClient:
     ) -> Dict[str, Any]:
         """发送API请求"""
         try:
-            url = f"{self.base_url}/rest/V1/{endpoint.lstrip('/')}"
+            url = f"{self.base_url}/rest/{self.store_code}/V1/{endpoint.lstrip('/')}"
             
             # 获取OAuth认证头
             oauth_headers = self._get_oauth_headers(method, url, data)
@@ -175,6 +208,12 @@ class MagentoClient:
                 params=params,
                 headers=headers
             )
+            
+            if response.status_code == 401 and retry_count < 1:
+                # 尝试刷新管理员token并重试一次
+                await self._refresh_admin_token()
+                # 刷新后重试
+                return await self._make_request(method, endpoint, data, params, retry_count + 1)
             
             if response.status_code not in [200, 201]:
                 raise MagentoAPIError(

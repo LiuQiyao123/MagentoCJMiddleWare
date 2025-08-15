@@ -738,8 +738,12 @@ class CJClient:
         """获取产品详情"""
         await self._ensure_authenticated()
         
-        async with self._client as client:
-            response = await client.get(
+        # 如果客户端未初始化或已关闭，则重新初始化
+        if self._client is None or getattr(self._client, "is_closed", False):
+            await self.initialize()
+        
+        try:
+            response = await self._client.get(
                 f"{self.base_url}/product/query",
                 params={"pid": product_id},
                 headers={
@@ -747,23 +751,29 @@ class CJClient:
                     "Content-Type": "application/json"
                 }
             )
-            
-            if response.status_code != 200:
-                raise CJAPIError(
-                    message=f"获取产品详情失败: {response.status_code}",
-                    error_code="CJ_PRODUCT_DETAIL_ERROR",
-                    details={"status_code": response.status_code, "response": response.text}
-                )
-            
-            result = response.json()
-            if not result.get("result"):
-                raise CJAPIError(
-                    message="产品详情API返回错误",
-                    error_code="CJ_PRODUCT_DETAIL_ERROR",
-                    details={"response": result}
-                )
-            
-            return result.get("data", {})
+        except Exception as e:
+            raise CJAPIError(
+                message="请求产品详情失败",
+                error_code="CJ_PRODUCT_DETAIL_ERROR",
+                details={"error": str(e)}
+            )
+        
+        if response.status_code != 200:
+            raise CJAPIError(
+                message=f"获取产品详情失败: {response.status_code}",
+                error_code="CJ_PRODUCT_DETAIL_ERROR",
+                details={"status_code": response.status_code, "response": response.text}
+            )
+        
+        result = response.json()
+        if not result.get("result"):
+            raise CJAPIError(
+                message="产品详情API返回错误",
+                error_code="CJ_PRODUCT_DETAIL_ERROR",
+                details={"response": result}
+            )
+        
+        return result.get("data", {})
     
     async def get_product_variants(self, product_id: str) -> Dict[str, Any]:
         """获取产品变体"""

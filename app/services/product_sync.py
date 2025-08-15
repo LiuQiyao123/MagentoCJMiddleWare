@@ -15,6 +15,7 @@ from app.config.database import get_db
 from app.models.product import ProductMapping, SyncStatus
 from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
+from app.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
@@ -213,49 +214,35 @@ class ProductSyncService:
     ) -> Dict[str, Any]:
         """构建Magento产品数据"""
         
-        # 基础产品信息
         magento_product = {
-            "sku": f"CJ_{cj_product['pid']}",
-            "name": cj_product.get("productName", ""),
-            "price": cj_product.get("sellPrice", 0),
-            "status": 1,  # 启用
-            "visibility": 4,  # 目录和搜索可见
+            "sku": cj_product["productSku"],
+            "name": cj_product.get("productNameEn") or cj_product.get("productName") or cj_product["productSku"],
+            "price": float(str(cj_product.get("sellPrice", "0").split("-")[0] or 0)),
+            "status": 1,
+            "visibility": 4,
             "type_id": "simple",
-            "attribute_set_id": 4,  # 默认属性集
-            "weight": cj_product.get("productWeight", 0),
-            "extension_attributes": {},
-            "custom_attributes": [
-                {
-                    "attribute_code": "description",
-                    "value": cj_product.get("description", "")
-                },
-                {
-                    "attribute_code": "short_description", 
-                    "value": cj_product.get("productName", "")
-                },
-                {
-                    "attribute_code": "meta_title",
-                    "value": cj_product.get("productName", "")
-                },
-                {
-                    "attribute_code": "cj_product_id",
-                    "value": cj_product["pid"]
+            "attribute_set_id": 4,
+            "weight": float(str(cj_product.get("packingWeight", "0").split("-")[0] or 0)),
+            "extension_attributes": {
+                "stock_item": {
+                    "qty": 100,
+                    "is_in_stock": True
                 }
-            ]
+            }
         }
         
-        # 添加产品图片
-        if cj_product.get("productImage"):
-            magento_product["media_gallery_entries"] = [
-                {
-                    "media_type": "image",
-                    "label": "Product Image",
-                    "position": 1,
-                    "disabled": False,
-                    "types": ["image", "small_image", "thumbnail"],
-                    "file": cj_product["productImage"]
-                }
-            ]
+        # 暂时不设置图片，避免 Magento "The image content is invalid" 错误
+        # if cj_product.get("productImage"):
+        #     magento_product["media_gallery_entries"] = [
+        #         {
+        #             "media_type": "image",
+        #             "label": "Product Image",
+        #             "position": 1,
+        #             "disabled": False,
+        #             "types": ["image", "small_image", "thumbnail"],
+        #             "file": cj_product["productImage"]
+        #         }
+        #     ]
         
         # 处理变体（如果有多个变体，创建为可配置产品）
         if len(variants) > 1:
