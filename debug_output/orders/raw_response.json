@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-09-25T11:31:26.503577",
+  "status_code": 200,
+  "headers": {
+    "connection": "close",
+    "content-length": "121",
+    "content-type": "application/json",
+    "date": "Thu, 25 Sep 2025 03:31:26 GMT",
+    "server": "uvicorn",
+    "x-process-time": "0.1500000000014552"
+  },
+  "request_data": {
+    "hours_back": 24
+  },
+  "response_text": "{\"success\":true,\"message\":\"Order sync started in background\",\"data\":{\"status\":\"background_task_started\",\"hours_back\":24}}"
+}

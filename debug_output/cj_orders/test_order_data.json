@@ -1,0 +1,21 @@
+{
+  "order_number": "TEST_ORDER_1758771198",
+  "products": [
+    {
+      "pid": "2508140535061603700",
+      "variant_id": "2508140535061604000",
+      "quantity": 1,
+      "price": 9.62
+    }
+  ],
+  "shipping_address": {
+    "name": "Test User",
+    "phone": "1234567890",
+    "address": "123 Test Street",
+    "city": "Test City",
+    "state": "Test State",
+    "zip": "12345",
+    "country": "US"
+  },
+  "remark": "This is a test order for API testing"
+}

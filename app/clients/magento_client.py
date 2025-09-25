@@ -373,6 +373,55 @@ class MagentoClient:
         }
         return await self._make_request("GET", "/customers/search", params=params)
     
+    async def assign_child_to_configurable_product(self, parent_sku: str, child_sku: str) -> bool:
+        """
+        将简单商品关联到可配置商品
+        
+        Args:
+            parent_sku: 可配置商品的SKU
+            child_sku: 简单商品的SKU
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            endpoint = f"/configurable-products/{parent_sku}/children"
+            data = {"childSku": child_sku}
+            
+            # Magento API的这个端点在成功时返回 "true"
+            response = await self._make_request("POST", endpoint, data=data)
+            
+            # 确认响应是布尔值true
+            if isinstance(response, bool) and response:
+                return True
+            
+            # 有些Magento版本可能返回一个包含true的列表或其他格式
+            logger.warning(
+                "Assignable child to configurable product response was not a simple boolean true",
+                response=response
+            )
+            # 做出最佳猜测
+            return "true" in str(response).lower()
+
+        except MagentoAPIError as e:
+            # 如果链接已经存在，Magento会返回一个特定的错误
+            # "The product is already linked."
+            if e.details and "already linked" in str(e.details.get("response", "")):
+                logger.info(
+                    "Product link already exists, considering it a success",
+                    parent_sku=parent_sku,
+                    child_sku=child_sku
+                )
+                return True
+            
+            logger.error(
+                "Failed to assign child product to configurable product",
+                parent_sku=parent_sku,
+                child_sku=child_sku,
+                error=str(e)
+            )
+            raise e
+    
     # 其他接口
     async def get_categories(self) -> Dict[str, Any]:
         """获取商品分类"""

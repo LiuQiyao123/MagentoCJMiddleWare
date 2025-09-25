@@ -35,8 +35,18 @@ class OrderSyncService:
     async def initialize(self) -> None:
         """初始化服务"""
         try:
+            # 优先初始化CJ客户端（必须成功）
             self.cj_client = await get_cj_client()
-            self.magento_client = await get_magento_client()
+            logger.info("CJ client initialized successfully")
+            
+            # 尝试初始化Magento客户端（允许失败）
+            try:
+                self.magento_client = await get_magento_client()
+                logger.info("Magento client initialized successfully")
+            except Exception as e:
+                logger.warning("Magento client initialization failed, will retry later", error=str(e))
+                self.magento_client = None
+                
             logger.info("Order sync service initialized successfully")
         except Exception as e:
             logger.error("Failed to initialize order sync service", error=str(e))

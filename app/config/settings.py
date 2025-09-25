@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "CJ Magento Middleware"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
-    
+    API_KEY: str  # 新增: 用于保护API的静态密钥
+
     # 加密密钥
     SECRET_KEY: str
 
@@ -54,12 +55,6 @@ class Settings(BaseSettings):
     MAGENTO_ADMIN_PASSWORD: Optional[str] = Field(default=None, description="用于自动刷新Token的管理员密码")
     MAGENTO_STORE_CODE: str = Field(default="default", description="REST调用使用的Store View代码")
     
-    # 兼容旧配置
-    MAGENTO_CONSUMER_KEY: Optional[str] = Field(default=None, description="Magento Consumer Key (兼容)")
-    MAGENTO_CONSUMER_SECRET: Optional[str] = Field(default=None, description="Magento Consumer Secret (兼容)")
-    MAGENTO_ACCESS_TOKEN: Optional[str] = Field(default=None, description="Magento Access Token (兼容)")
-    MAGENTO_ACCESS_TOKEN_SECRET: Optional[str] = Field(default=None, description="Magento Access Token Secret (兼容)")
-    
     # CJ Dropshipping配置
     CJ_API_BASE_URL: str = Field(
         default="https://developers.cjdropshipping.com/api2.0/v1",
@@ -69,10 +64,6 @@ class Settings(BaseSettings):
     CJ_API_KEY: str = Field(description="CJ API Key")
     CJ_TIMEOUT: int = Field(default=30, description="CJ API超时时间")
     CJ_MAX_RETRIES: int = Field(default=3, description="CJ API最大重试次数")
-    
-    # 兼容旧配置
-    CJ_API_PASSWORD: Optional[str] = Field(default=None, description="CJ API密码 (兼容)")
-    CJ_API_SECRET: Optional[str] = Field(default=None, description="CJ API Secret (兼容)")
     
     # 同步配置
     SYNC_INTERVAL_MINUTES: int = Field(default=30, description="同步间隔（分钟）")
@@ -98,19 +89,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", description="Celery Broker URL")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2", description="Celery Result Backend URL")
     
-    @validator("ALLOWED_ORIGINS", pre=True)
-    def parse_cors_origins(cls, v):
-        """解析CORS配置"""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
-    
-    @validator("ALLOWED_HOSTS", pre=True)
-    def parse_allowed_hosts(cls, v):
-        """解析允许的主机"""
-        if isinstance(v, str):
-            return [host.strip() for host in v.split(",")]
-        return v
+    # CORS和安全配置
+    ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000", "http://127.0.0.1:3000"], description="允许的源")
+    ALLOWED_HOSTS: List[str] = Field(default=["localhost", "127.0.0.1"], description="允许的主机")
     
     @validator("LOG_LEVEL")
     def validate_log_level(cls, v):

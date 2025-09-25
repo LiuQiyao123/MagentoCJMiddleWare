@@ -82,4 +82,38 @@ async def _sync_orders_background(
         logger.info("Background order sync completed", result=result)
         
     except Exception as e:
-        logger.error("Background order sync failed", error=str(e)) 
+        logger.error("Background order sync failed", error=str(e))
+
+
+@router.get("/tracking/{order_id}")
+async def get_order_tracking(
+    order_id: str,
+    order_sync_service: OrderSyncService = Depends(get_order_sync_service)
+):
+    """获取订单跟踪信息"""
+    try:
+        # 确保服务已初始化
+        if not order_sync_service.cj_client:
+            await order_sync_service.initialize()
+        
+        # 从CJ获取订单详情
+        cj_order = await order_sync_service.cj_client.get_order_detail(order_id)
+        
+        # 获取跟踪信息
+        tracking_info = await order_sync_service.cj_client.get_tracking_info(order_id)
+        
+        return {
+            "success": True,
+            "order_id": order_id,
+            "cj_order": cj_order,
+            "tracking_info": tracking_info,
+            "cached": True
+        }
+        
+    except Exception as e:
+        logger.error("获取订单跟踪信息失败", error=str(e), order_id=order_id)
+        return {
+            "success": False,
+            "error": str(e),
+            "error_code": "5001"
+        } 

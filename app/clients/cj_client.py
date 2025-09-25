@@ -284,7 +284,7 @@ class CJClient:
                 )
             
             headers = {
-                "Authorization": f"Bearer {self._access_token}",
+                "CJ-Access-Token": self._access_token,  # CJ API使用CJ-Access-Token头
                 "Content-Type": "application/json"
             }
             
@@ -381,7 +381,7 @@ class CJClient:
                 )
             
             headers = {
-                "Authorization": f"Bearer {self._access_token}",
+                "CJ-Access-Token": self._access_token,  # CJ API使用CJ-Access-Token头
                 "Content-Type": "application/json"
             }
             
@@ -727,28 +727,52 @@ class CJClient:
         if category_id:
             params["categoryId"] = category_id
             
-        return await self._make_rate_limited_request(
-            "GET", 
-            "/product/list", 
-            APIEndpoint.PRODUCT_SEARCH, 
-            params=params
+        # 严格遵守CJ API频率限制：Free用户每秒最多1次请求
+        await asyncio.sleep(1.2)  # 等待1.2秒确保不超限
+        
+        # 直接调用API，不使用token
+        params.update({
+            "email": self.email,
+            "password": self.api_key
+        })
+        
+        response = await self._client.get(
+            f"{self.base_url}/product/list",
+            params=params,
+            headers={"Content-Type": "application/json"}
         )
+        
+        if response.status_code != 200:
+            raise CJAPIError(
+                message=f"搜索产品失败: {response.status_code}",
+                error_code="CJ_PRODUCT_SEARCH_ERROR",
+                details={"status_code": response.status_code, "response": response.text}
+            )
+        
+        return response.json()
     
     async def get_product_detail(self, product_id: str) -> Dict[str, Any]:
         """获取产品详情"""
-        await self._ensure_authenticated()
-        
         # 如果客户端未初始化或已关闭，则重新初始化
         if self._client is None or getattr(self._client, "is_closed", False):
             await self.initialize()
         
         try:
+            # 严格遵守CJ API频率限制：Free用户每秒最多1次请求
+            await asyncio.sleep(1.2)  # 等待1.2秒确保不超限
+            
+            # 确保有有效的access token
+            await self._ensure_authenticated()
+            
+            # 使用access token进行认证
             response = await self._client.get(
                 f"{self.base_url}/product/query",
-                params={"pid": product_id},
+                params={
+                    "pid": product_id
+                },
                 headers={
-                    "CJ-Access-Token": self._access_token,  # 使用CJ API文档指定的header格式
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "CJ-Access-Token": self._access_token
                 }
             )
         except Exception as e:
@@ -773,7 +797,7 @@ class CJClient:
                 details={"response": result}
             )
         
-        return result.get("data", {})
+        return result
     
     async def get_product_variants(self, product_id: str) -> Dict[str, Any]:
         """获取产品变体"""

@@ -6,7 +6,7 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import QueuePool, NullPool
 
 from app.config.settings import get_settings
 
@@ -31,11 +31,10 @@ class DatabaseManager:
     async def initialize(self) -> None:
         """初始化数据库连接"""
         try:
-            # 创建异步引擎（使用默认pool配置）
+            # 创建异步引擎（使用NullPool避免QueuePool问题）
             self.async_engine = create_async_engine(
                 settings.database_url,
-                pool_size=settings.DB_POOL_SIZE,
-                max_overflow=settings.DB_MAX_OVERFLOW,
+                poolclass=NullPool,  # 使用NullPool避免QueuePool与asyncio的兼容性问题
                 pool_pre_ping=True,
                 pool_recycle=3600,
                 echo=settings.DEBUG,

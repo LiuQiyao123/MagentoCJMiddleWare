@@ -57,11 +57,18 @@ async def sync_single_product(
         )
         
         return {
-            "success": True,
+            "success": result.get("success", True),
+            "product_id": result.get("product_id"),
             "product_name": result.get("product_name"),
             "magento_product_id": result.get("magento_id"),
             "sku": result.get("sku"),
-            "magento_url": result.get("magento_url")
+            "magento_url": result.get("magento_url"),
+            "cj_data": result.get("cj_data"),
+            "magento_data": result.get("magento_data"),
+            "magento_result": result.get("magento_result"),
+            "magento_error": result.get("magento_error"),
+            "sync_duration_ms": result.get("sync_duration_ms"),
+            "cached": result.get("cached", False)
         }
         
     except Exception as e:

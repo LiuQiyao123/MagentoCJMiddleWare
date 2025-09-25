@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "message": "Order sync started in background",
+  "data": {
+    "status": "background_task_started",
+    "hours_back": 24
+  }
+}

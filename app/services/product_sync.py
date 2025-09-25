@@ -35,8 +35,18 @@ class ProductSyncService:
     async def initialize(self) -> None:
         """初始化服务"""
         try:
+            # 优先初始化CJ客户端（必须成功）
             self.cj_client = await get_cj_client()
-            self.magento_client = await get_magento_client()
+            logger.info("CJ client initialized successfully")
+            
+            # 尝试初始化Magento客户端（允许失败）
+            try:
+                self.magento_client = await get_magento_client()
+                logger.info("Magento client initialized successfully")
+            except Exception as e:
+                logger.warning("Magento client initialization failed, will retry later", error=str(e))
+                self.magento_client = None
+                
             logger.info("Product sync service initialized successfully")
         except Exception as e:
             logger.error("Failed to initialize product sync service", error=str(e))
@@ -115,8 +125,8 @@ class ProductSyncService:
                     
                 page += 1
                 
-                # 添加延迟避免API限制
-                await asyncio.sleep(0.5)
+                # 严格遵守CJ API频率限制：Free用户每秒最多1次请求
+                await asyncio.sleep(1.5)  # 等待1.5秒确保不超限
             
             logger.info("CJ product sync completed", result=sync_result)
             return sync_result
@@ -231,18 +241,11 @@ class ProductSyncService:
             }
         }
         
-        # 暂时不设置图片，避免 Magento "The image content is invalid" 错误
-        # if cj_product.get("productImage"):
-        #     magento_product["media_gallery_entries"] = [
-        #         {
-        #             "media_type": "image",
-        #             "label": "Product Image",
-        #             "position": 1,
-        #             "disabled": False,
-        #             "types": ["image", "small_image", "thumbnail"],
-        #             "file": cj_product["productImage"]
-        #         }
-        #     ]
+        # 处理产品图片
+        if cj_product.get("productImage"):
+            # 暂时不设置图片，避免 Magento "The image content is invalid" 错误
+            # 图片处理需要异步函数，这里先跳过
+            logger.info("Product has image, but skipping for now", image_url=cj_product["productImage"])
         
         # 处理变体（如果有多个变体，创建为可配置产品）
         if len(variants) > 1:
@@ -308,8 +311,8 @@ class ProductSyncService:
                 
                 sync_result["total_processed"] += 1
                 
-                # 添加延迟避免API限制
-                await asyncio.sleep(0.2)
+                # 严格遵守CJ API频率限制：Free用户每秒最多1次请求
+                await asyncio.sleep(1.5)  # 等待1.5秒确保不超限
             
             logger.info("Inventory sync completed", result=sync_result)
             return sync_result
@@ -340,25 +343,52 @@ class ProductSyncService:
             同步结果字典
         """
         import time
+        import json
+        import os
         start_time = time.time()
         
         try:
             logger.info("开始同步单个商品", product_id=product_id)
             
-            # 确保客户端已初始化
-            if not self.cj_client or not self.magento_client:
+            # 确保CJ客户端已初始化（必须成功）
+            if not self.cj_client:
                 await self.initialize()
             
-            # 1. 从CJ获取商品详情
+            # 1. 从CJ获取商品详情（必须成功）
+            logger.info("正在从CJ获取商品详情", product_id=product_id)
             cj_product = await self.cj_client.get_product_detail(product_id)
             if not cj_product:
                 raise ValueError(f"商品不存在: {product_id}")
             
-            # 2. 转换为Magento格式
-            magento_product_data = self._build_magento_product(cj_product, [])
+            # 缓存CJ商品数据
+            await self._cache_cj_product_data(product_id, cj_product, product_url)
             
-            # 3. 创建Magento产品
-            magento_result = await self.magento_client.create_product(magento_product_data)
+            # 2. 转换为Magento格式
+            logger.info("正在转换商品数据格式", product_id=product_id)
+            # CJ API返回的是完整响应，需要提取data部分
+            cj_product_data = cj_product.get("data", {})
+            if not cj_product_data:
+                raise ValueError("CJ API返回的数据格式不正确")
+            magento_product_data = self._build_magento_product(cj_product_data, [])
+            
+            # 缓存Magento格式数据
+            await self._cache_magento_product_data(product_id, magento_product_data)
+            
+            # 3. 尝试创建Magento产品（允许失败）
+            magento_result = None
+            magento_error = None
+            
+            if self.magento_client:
+                try:
+                    logger.info("正在创建Magento产品", product_id=product_id)
+                    magento_result = await self.magento_client.create_product(magento_product_data)
+                    logger.info("Magento产品创建成功", product_id=product_id, magento_id=magento_result.get("id"))
+                except Exception as e:
+                    magento_error = str(e)
+                    logger.warning("Magento产品创建失败，数据已缓存", product_id=product_id, error=magento_error)
+            else:
+                magento_error = "Magento客户端未初始化"
+                logger.warning("Magento客户端未初始化，数据已缓存", product_id=product_id)
             
             # 4. 计算同步耗时
             sync_duration = int((time.time() - start_time) * 1000)  # 转换为毫秒
@@ -366,24 +396,40 @@ class ProductSyncService:
             # 5. 记录同步日志
             await self._log_sync_result(
                 product_id=product_id,
-                success=True,
-                magento_id=magento_result.get("id"),
-                error_message=None,
+                success=magento_result is not None,
+                magento_id=magento_result.get("id") if magento_result else None,
+                error_message=magento_error,
                 product_url=product_url,
                 sync_duration=sync_duration
             )
             
-            logger.info("单个商品同步成功", 
+            # 6. 返回结果（包含CJ数据和Magento结果）
+            result = {
+                "success": magento_result is not None,
+                "product_id": product_id,
+                "product_name": cj_product.get("data", {}).get("productName", "未知商品"),
+                "cj_data": cj_product,
+                "magento_data": magento_product_data,
+                "magento_result": magento_result,
+                "magento_error": magento_error,
+                "sync_duration_ms": sync_duration,
+                "cached": True
+            }
+            
+            if magento_result:
+                result.update({
+                    "magento_id": magento_result.get("id"),
+                    "sku": magento_result.get("sku"),
+                    "magento_url": f"/admin/catalog/product/edit/id/{magento_result.get('id')}"
+                })
+            
+            logger.info("商品同步处理完成", 
                        product_id=product_id, 
-                       magento_id=magento_result.get("id"),
+                       success=magento_result is not None,
+                       magento_id=magento_result.get("id") if magento_result else None,
                        duration_ms=sync_duration)
             
-            return {
-                "product_name": cj_product.get("data", {}).get("productName"),
-                "magento_id": magento_result.get("id"),
-                "sku": magento_product_data.get("sku"),
-                "magento_url": f"{get_settings().MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
-            }
+            return result
             
         except Exception as e:
             error_message = str(e)
@@ -477,6 +523,61 @@ class ProductSyncService:
         )
         
         session.add(log_entry)
+
+    async def _cache_cj_product_data(self, product_id: str, cj_data: Dict[str, Any], product_url: Optional[str] = None) -> None:
+        """缓存CJ商品数据"""
+        try:
+            import os
+            import json
+            
+            # 创建缓存目录
+            cache_dir = "cache/products"
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # 缓存数据
+            cache_data = {
+                "product_id": product_id,
+                "product_url": product_url,
+                "cj_data": cj_data,
+                "cached_at": datetime.utcnow().isoformat(),
+                "data_source": "cj_api"
+            }
+            
+            cache_file = f"{cache_dir}/cj_{product_id}.json"
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+            
+            logger.info("CJ商品数据已缓存", product_id=product_id, cache_file=cache_file)
+            
+        except Exception as e:
+            logger.error("缓存CJ商品数据失败", product_id=product_id, error=str(e))
+
+    async def _cache_magento_product_data(self, product_id: str, magento_data: Dict[str, Any]) -> None:
+        """缓存Magento格式商品数据"""
+        try:
+            import os
+            import json
+            
+            # 创建缓存目录
+            cache_dir = "cache/products"
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # 缓存数据
+            cache_data = {
+                "product_id": product_id,
+                "magento_data": magento_data,
+                "cached_at": datetime.utcnow().isoformat(),
+                "data_source": "magento_format"
+            }
+            
+            cache_file = f"{cache_dir}/magento_{product_id}.json"
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+            
+            logger.info("Magento格式商品数据已缓存", product_id=product_id, cache_file=cache_file)
+            
+        except Exception as e:
+            logger.error("缓存Magento格式商品数据失败", product_id=product_id, error=str(e))
 
 
 # 全局产品同步服务实例
