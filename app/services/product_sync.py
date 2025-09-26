@@ -420,7 +420,8 @@ class ProductSyncService:
                 result.update({
                     "magento_id": magento_result.get("id"),
                     "sku": magento_result.get("sku"),
-                    "magento_url": f"/admin/catalog/product/edit/id/{magento_result.get('id')}"
+                    # 构造完整的 Magento 后台链接，便于直接访问
+                    "magento_url": f"{get_settings().MAGENTO_BASE_URL.rstrip('/')}/admin/catalog/product/edit/id/{magento_result.get('id')}"
                 })
             
             logger.info("商品同步处理完成", 
