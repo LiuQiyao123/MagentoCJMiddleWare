@@ -232,6 +232,7 @@ class ProductSyncService:
             "visibility": 4,
             "type_id": "simple",
             "attribute_set_id": 4,
+            "website_ids": get_settings().MAGENTO_WEBSITE_IDS,
             "weight": float(str(cj_product.get("packingWeight", "0").split("-")[0] or 0)),
             "extension_attributes": {
                 "stock_item": {
@@ -413,8 +414,8 @@ class ProductSyncService:
                 "magento_result": magento_result,
                 "magento_error": magento_error,
                 "sync_duration_ms": sync_duration,
-                "magento_id": magento_result.get("id"),
-                "sku": magento_result.get("sku"),
+                "magento_id": magento_result.get("id") if magento_result else None,
+                "sku": magento_result.get("sku") if magento_result else None,
                 "cached": True
             }
             

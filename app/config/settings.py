@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     MAGENTO_ADMIN_USERNAME: Optional[str] = Field(default=None, description="用于自动刷新Token的管理员用户名")
     MAGENTO_ADMIN_PASSWORD: Optional[str] = Field(default=None, description="用于自动刷新Token的管理员密码")
     MAGENTO_STORE_CODE: str = Field(default="default", description="REST调用使用的Store View代码")
+    MAGENTO_WEBSITE_IDS: List[int] = Field(default=[1], description="创建商品时分配的Website ID 列表，以逗号分隔")
+    MAGENTO_ADMIN_PATH: str = Field(default="admin", description="Magento 后台路径，如 admin_wim6xs1")
     
     # CJ Dropshipping配置
     CJ_API_BASE_URL: str = Field(
