@@ -413,16 +413,10 @@ class ProductSyncService:
                 "magento_result": magento_result,
                 "magento_error": magento_error,
                 "sync_duration_ms": sync_duration,
+                "magento_id": magento_result.get("id"),
+                "sku": magento_result.get("sku"),
                 "cached": True
             }
-            
-            if magento_result:
-                result.update({
-                    "magento_id": magento_result.get("id"),
-                    "sku": magento_result.get("sku"),
-                    # 构造完整的 Magento 后台链接，便于直接访问
-                    "magento_url": f"{get_settings().MAGENTO_BASE_URL.rstrip('/')}/admin/catalog/product/edit/id/{magento_result.get('id')}"
-                })
             
             logger.info("商品同步处理完成", 
                        product_id=product_id, 
