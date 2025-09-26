@@ -16,8 +16,9 @@ router = APIRouter()
 
 
 class ProductSyncSingleRequest(BaseModel):
-    """单个产品同步请求模型"""
+    """单商品同步请求模型"""
     product_url: str = Field(..., description="CJ商品链接")
+    category_id: Optional[int] = Field(None, description="Magento分类ID，可选")
 
 
 class InventorySyncRequest(BaseModel):
@@ -53,7 +54,8 @@ async def sync_single_product(
         # 同步商品
         result = await product_sync_service.sync_single_product(
             product_id=product_id,
-            product_url=request.product_url
+            product_url=request.product_url,
+            category_id=request.category_id
         )
         
         return {

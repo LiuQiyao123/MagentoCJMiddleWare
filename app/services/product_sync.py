@@ -242,6 +242,10 @@ class ProductSyncService:
             }
         }
         
+        # 分类链接
+        if category_id:
+            magento_product["category_links"] = [{"position": 0, "category_id": category_id}]
+
         # 处理产品图片
         if cj_product.get("productImage"):
             # 暂时不设置图片，避免 Magento "The image content is invalid" 错误
@@ -332,7 +336,7 @@ class ProductSyncService:
         # 实际实现取决于具体的业务需求
         pass
     
-    async def sync_single_product(self, product_id: str, product_url: Optional[str] = None) -> Dict[str, Any]:
+    async def sync_single_product(self, product_id: str, product_url: Optional[str] = None, category_id: Optional[int] = None) -> Dict[str, Any]:
         """
         同步单个CJ商品到Magento
         
@@ -370,7 +374,7 @@ class ProductSyncService:
             cj_product_data = cj_product.get("data", {})
             if not cj_product_data:
                 raise ValueError("CJ API返回的数据格式不正确")
-            magento_product_data = self._build_magento_product(cj_product_data, [])
+            magento_product_data = self._build_magento_product(cj_product_data, [], category_id)
             
             # 缓存Magento格式数据
             await self._cache_magento_product_data(product_id, magento_product_data)

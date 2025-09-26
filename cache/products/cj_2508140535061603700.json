@@ -111,7 +111,7 @@
       "productVideo": "",
       "status": "3",
       "suggestSellPrice": "51.33",
-      "listedNum": 561,
+      "listedNum": 591,
       "supplierName": null,
       "supplierId": null,
       "customizationVersion": null,
@@ -120,9 +120,9 @@
       "customizationJson3": null,
       "customizationJson4": null
     },
-    "requestId": "7a6dd2c2165140d584fe54eabc0af49d",
+    "requestId": "8444044801a146cba9e912aeb6cef9d6",
     "success": true
   },
-  "cached_at": "2025-09-25T10:04:02.812840",
+  "cached_at": "2025-09-26T01:44:53.182991",
   "data_source": "cj_api"
 }
