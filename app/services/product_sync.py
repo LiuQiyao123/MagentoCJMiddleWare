@@ -152,7 +152,7 @@ class ProductSyncService:
             variant_data = variants.get("data", {}).get("list", [])
             
             # 构造Magento产品数据
-            magento_product = self._build_magento_product(product_data, variant_data)
+            magento_product = self._build_magento_product(product_data, variant_data, None)
             
             # 检查产品是否已存在映射
             async with get_db() as session:
@@ -220,7 +220,8 @@ class ProductSyncService:
     def _build_magento_product(
         self,
         cj_product: Dict[str, Any],
-        variants: List[Dict[str, Any]]
+        variants: List[Dict[str, Any]],
+        category_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """构建Magento产品数据"""
         
