@@ -247,6 +247,13 @@
                     >
                 </div>
 
+                <div class="form-group">
+                    <label for="categorySelect">Magento 分类（可选）</label>
+                    <select id="categorySelect" name="categorySelect" style="width:100%;padding:15px;border:2px solid #e1e5e9;border-radius:10px;font-size:16px;">
+                        <option value="">-- 请选择分类 --</option>
+                    </select>
+                </div>
+
                 <button type="submit" class="btn" id="syncBtn">
                     🔄 开始同步
                 </button>
@@ -292,6 +299,30 @@
                 this.form.addEventListener('submit', (e) => this.handleSubmit(e));
                 this.urlInput.addEventListener('input', () => this.handleUrlInput());
                 this.loadHistory();
+                this.loadCategories();
+            }
+
+            async loadCategories() {
+                try {
+                    const resp = await fetch('/api/v1/categories/');
+                    const json = await resp.json();
+                    if (json.success) {
+                        const select = document.getElementById('categorySelect');
+                        const traverse = (node, prefix='') => {
+                            const name = prefix + node.name;
+                            const option = document.createElement('option');
+                            option.value = node.id;
+                            option.textContent = name;
+                            select.appendChild(option);
+                            if (node.children_data && node.children_data.length) {
+                                node.children_data.forEach(child=> traverse(child, prefix + '—'));
+                            }
+                        };
+                        traverse(json.data);
+                    }
+                } catch(err) {
+                    console.log('加载分类失败', err);
+                }
             }
 
             handleUrlInput() {
@@ -326,7 +357,8 @@
                         },
                         body: JSON.stringify({
                             product_url: url,
-                            product_name: name || undefined
+                            product_name: name || undefined,
+                            category_id: document.getElementById('categorySelect').value || undefined
                         })
                     });
 

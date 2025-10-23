@@ -4,7 +4,7 @@ API v1 路由初始化
 from fastapi import APIRouter
 
 # 新增 categories
-from app.api.v1 import products, orders, monitor, categories
+from app.api.v1 import products, orders, monitor, categories, webhooks
 
 api_router = APIRouter()
 
