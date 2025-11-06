@@ -17,6 +17,8 @@ from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
 from app.config.settings import get_settings
 
+import httpx
+
 logger = structlog.get_logger(__name__)
 
 
@@ -221,45 +223,120 @@ class ProductSyncService:
         self,
         cj_product: Dict[str, Any],
         variants: List[Dict[str, Any]],
-        category_id: Optional[int] = None,
+        inventory: List[Dict[str, Any]],
+        category_id: Optional[int],
+        retail_price: float,
+        attribute_set_id: int
     ) -> Dict[str, Any]:
         """构建Magento产品数据"""
         
-        magento_product = {
-            "sku": cj_product["productSku"],
-            "name": cj_product.get("productNameEn") or cj_product.get("productName") or cj_product["productSku"],
-            "price": float(str(cj_product.get("sellPrice", "0").split("-")[0] or 0)),
-            "status": 1,
-            "visibility": 4,
-            "type_id": "simple",
-            "attribute_set_id": 4,
-            "website_ids": get_settings().MAGENTO_WEBSITE_IDS,
-            "weight": float(str(cj_product.get("packingWeight", "0").split("-")[0] or 0)),
-            "extension_attributes": {
-                "stock_item": {
-                    "qty": 100,
-                    "is_in_stock": True
-                }
-            }
-        }
-        
-        # 分类链接
-        if category_id:
-            magento_product["category_links"] = [{"position": 0, "category_id": category_id}]
+        # 将库存信息按变体ID映射，方便查找
+        inventory_map = {item['vid']: item['stock'] for item in inventory}
 
-        # 处理产品图片
-        if cj_product.get("productImage"):
-            # 暂时不设置图片，避免 Magento "The image content is invalid" 错误
-            # 图片处理需要异步函数，这里先跳过
-            logger.info("Product has image, but skipping for now", image_url=cj_product["productImage"])
-        
-        # 处理变体（如果有多个变体，创建为可配置产品）
-        if len(variants) > 1:
-            magento_product["type_id"] = "configurable"
-            # 这里需要根据实际需求处理可配置产品的变体
+        # 单变体或无变体 -> 创建简单商品
+        if not variants or len(variants) <= 1:
+            variant = variants[0] if variants else {}
+            stock = inventory_map.get(variant.get('vid'), 0)
+
+            simple_product_payload = {
+                "sku": variant.get('variantSku') or cj_product["productSku"],
+                "name": cj_product.get("productNameEn") or cj_product.get("productName"),
+                "price": retail_price,
+                "status": 1, # 启用
+                "visibility": 4, # 目录, 搜索
+                "type_id": "simple",
+                "attribute_set_id": attribute_set_id,
+                "weight": variant.get('variantWeight') or cj_product.get("packingWeight", 0),
+                "extension_attributes": {
+                    "stock_item": {
+                        "qty": stock,
+                        "is_in_stock": stock > 0
+                    }
+                },
+                "custom_attributes": [
+                    {"attribute_code": "description", "value": cj_product.get("description", "")}
+                ]
+            }
+            if category_id:
+                simple_product_payload["category_links"] = [{"position": 0, "category_id": str(category_id)}]
             
-        return magento_product
-    
+            return simple_product_payload
+
+        # 多变体 -> 返回可配置商品及其所有子项的数据结构
+        else:
+            # 1. 构建父可配置商品
+            configurable_product_payload = {
+                "sku": cj_product["productSku"],
+                "name": cj_product.get("productNameEn") or cj_product.get("productName"),
+                "attribute_set_id": attribute_set_id,
+                "type_id": "configurable",
+                "status": 1,
+                "visibility": 4,
+                "custom_attributes": [
+                    {"attribute_code": "description", "value": cj_product.get("description", "")}
+                ],
+                "image_url": cj_product.get("productImage") # 传递图片URL
+            }
+            if category_id:
+                configurable_product_payload["category_links"] = [{"position": 0, "category_id": str(category_id)}]
+            
+            # 2. 构建所有子商品 (简单商品)
+            child_products = []
+            for variant in variants:
+                stock = inventory_map.get(variant.get('vid'), 0)
+                child_product = {
+                    "sku": variant.get('variantSku'),
+                    "name": cj_product.get("productNameEn") or cj_product.get("productName"),
+                    "price": retail_price, # 假设所有变体使用相同的零售价
+                    "status": 1,
+                    "visibility": 1, # 单独不可见
+                    "type_id": "simple",
+                    "attribute_set_id": attribute_set_id,
+                    "weight": variant.get('variantWeight', 0),
+                    "extension_attributes": {
+                        "stock_item": {
+                            "qty": stock,
+                            "is_in_stock": stock > 0
+                        }
+                    },
+                    "image_url": variant.get("variantImage") or cj_product.get("productImage"), # 传递图片URL
+                    # TODO: 需要处理 `custom_attributes` 来设置颜色、尺寸等
+                }
+                child_products.append(child_product)
+
+            return {
+                "type": "configurable",
+                "parent": configurable_product_payload,
+                "children": child_products
+            }
+
+    async def _upload_magento_image(self, sku: str, image_url: str):
+        """下载图片并上传到Magento"""
+        if not self.magento_client:
+            return
+            
+        try:
+            logger.info("开始上传Magento图片", sku=sku, image_url=image_url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(image_url, timeout=30.0)
+                response.raise_for_status()
+                image_data = response.content
+
+            import base64
+            encoded_image = base64.b64encode(image_data).decode('utf-8')
+            
+            await self.magento_client.add_product_media(
+                sku=sku,
+                image_content=encoded_image,
+                image_name=image_url.split("/")[-1].split("?")[0] or f"{sku}.jpg",
+                image_types=["image", "small_image", "thumbnail"]
+            )
+            logger.info("Magento图片上传成功", sku=sku)
+
+        except Exception as e:
+            logger.error("Magento图片上传失败", sku=sku, image_url=image_url, error=str(e))
+
+
     async def sync_inventory_from_cj(self, product_mappings: Optional[List[ProductMapping]] = None) -> Dict[str, Any]:
         """从CJ同步库存到Magento"""
         if not self.cj_client or not self.magento_client:
@@ -337,13 +414,23 @@ class ProductSyncService:
         # 实际实现取决于具体的业务需求
         pass
     
-    async def sync_single_product(self, product_id: str, product_url: Optional[str] = None, category_id: Optional[int] = None) -> Dict[str, Any]:
+    async def sync_single_product(
+        self, 
+        product_id: str, 
+        product_url: Optional[str] = None, 
+        category_id: Optional[int] = None,
+        retail_price: float = 0.0,
+        attribute_set_id: int = 4
+    ) -> Dict[str, Any]:
         """
         同步单个CJ商品到Magento
         
         Args:
             product_id: CJ商品ID
             product_url: CJ商品链接（可选，用于日志记录）
+            category_id: Magento分类ID
+            retail_price: 零售价
+            attribute_set_id: Magento属性集ID
             
         Returns:
             同步结果字典
@@ -360,22 +447,46 @@ class ProductSyncService:
             if not self.cj_client:
                 await self.initialize()
             
-            # 1. 从CJ获取商品详情（必须成功）
-            logger.info("正在从CJ获取商品详情", product_id=product_id)
-            cj_product = await self.cj_client.get_product_detail(product_id)
-            if not cj_product:
-                raise ValueError(f"商品不存在: {product_id}")
+            # 1. 并行从CJ获取商品详情、变体和库存
+            logger.info("正在从CJ获取商品详情、变体和库存", product_id=product_id)
+            results = await asyncio.gather(
+                self.cj_client.get_product_detail(product_id),
+                self.cj_client.get_product_variants(product_id),
+                self.cj_client.get_product_inventory(product_id),
+                return_exceptions=True
+            )
             
+            # 检查API调用结果
+            cj_product_details, cj_variants, cj_inventory = results
+            for result in results:
+                if isinstance(result, Exception):
+                    raise ProductSyncError(
+                        message="Failed to fetch complete product data from CJ",
+                        error_code="CJ_DATA_FETCH_ERROR",
+                        details={"error": str(result), "product_id": product_id}
+                    )
+            
+            if not cj_product_details or not cj_product_details.get("data"):
+                raise ValueError(f"商品不存在或数据格式不正确: {product_id}")
+
             # 缓存CJ商品数据
-            await self._cache_cj_product_data(product_id, cj_product, product_url)
+            await self._cache_cj_product_data(product_id, cj_product_details, product_url)
             
             # 2. 转换为Magento格式
             logger.info("正在转换商品数据格式", product_id=product_id)
             # CJ API返回的是完整响应，需要提取data部分
-            cj_product_data = cj_product.get("data", {})
-            if not cj_product_data:
-                raise ValueError("CJ API返回的数据格式不正确")
-            magento_product_data = self._build_magento_product(cj_product_data, [], category_id)
+            cj_product_data = cj_product_details.get("data", {})
+            variants_data = cj_variants.get("data", [])
+            inventory_data = cj_inventory.get("data", [])
+
+            magento_product_data = self._build_magento_product(
+                cj_product_data, 
+                variants_data, 
+                inventory_data, 
+                category_id,
+                retail_price,
+                attribute_set_id
+            )
             
             # 缓存Magento格式数据
             await self._cache_magento_product_data(product_id, magento_product_data)
@@ -387,7 +498,42 @@ class ProductSyncService:
             if self.magento_client:
                 try:
                     logger.info("正在创建Magento产品", product_id=product_id)
-                    magento_result = await self.magento_client.create_product(magento_product_data)
+
+                    image_url_to_upload = None
+
+                    # 如果是可配置商品，执行不同的创建流程
+                    if magento_product_data.get("type") == "configurable":
+                        # 1. 创建父商品
+                        parent_payload = magento_product_data["parent"]
+                        image_url_to_upload = parent_payload.pop("image_url", None)
+                        parent_product = await self.magento_client.create_product(parent_payload)
+                        parent_sku = parent_product.get("sku")
+                        
+                        # 2. 创建子商品
+                        child_skus = []
+                        for child_payload in magento_product_data["children"]:
+                            # 子商品图片通常不单独上传，除非有特殊需求
+                            child_payload.pop("image_url", None) 
+                            child_product = await self.magento_client.create_product(child_payload)
+                            child_skus.append(child_product.get("sku"))
+                        
+                        # 3. 关联子商品
+                        await self.magento_client.link_simple_to_configurable(parent_sku, child_skus)
+                        
+                        magento_result = parent_product
+
+                    elif magento_product_data:
+                        image_url_to_upload = magento_product_data.pop("image_url", None)
+                        magento_result = await self.magento_client.create_product(magento_product_data)
+
+                    else:
+                        raise ValueError("magento_product_data为空，无法创建产品")
+
+                    # 上传图片
+                    if magento_result and image_url_to_upload:
+                        sku = magento_result.get("sku")
+                        await self._upload_magento_image(sku, image_url_to_upload)
+
                     logger.info("Magento产品创建成功", product_id=product_id, magento_id=magento_result.get("id"))
                 except Exception as e:
                     magento_error = str(e)
@@ -413,8 +559,12 @@ class ProductSyncService:
             result = {
                 "success": magento_result is not None,
                 "product_id": product_id,
-                "product_name": cj_product.get("data", {}).get("productName", "未知商品"),
-                "cj_data": cj_product,
+                "product_name": cj_product_details.get("data", {}).get("productName", "未知商品"),
+                "cj_data": {
+                    "details": cj_product_details,
+                    "variants": cj_variants,
+                    "inventory": cj_inventory,
+                },
                 "magento_data": magento_product_data,
                 "magento_result": magento_result,
                 "magento_error": magento_error,

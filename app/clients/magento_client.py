@@ -185,7 +185,8 @@ class MagentoClient:
         endpoint: str,
         data: Optional[Dict] = None,
         params: Optional[Dict] = None,
-        retry_count: int = 0
+        retry_count: int = 0,
+        returns_json: bool = True
     ) -> Dict[str, Any]:
         """发送API请求"""
         try:
@@ -226,7 +227,11 @@ class MagentoClient:
                     }
                 )
             
-            return response.json()
+            # 根据期望的返回类型处理响应
+            if returns_json:
+                return response.json()
+            else:
+                return response.text
             
         except httpx.RequestError as e:
             if retry_count < self.max_retries:
@@ -327,38 +332,51 @@ class MagentoClient:
         """更新订单状态"""
         return await self._make_request("POST", f"/orders/{order_id}/status", data={"status": status})
     
-    async def create_shipment(self, order_id: int, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """创建发货单"""
+    async def create_shipment(self, order_id: int, items: List[Dict[str, Any]]) -> str:
+        """为订单创建发货单(Shipment)，并返回Shipment ID"""
         shipment_data = {
             "items": items,
-            "notify": True,
-            "appendComment": True,
-            "comment": {
-                "comment": "Order shipped via CJ Dropshipping",
-                "is_visible_on_front": True
-            }
+            "notify": True, # 通知顾客
         }
-        return await self._make_request("POST", f"/order/{order_id}/ship", data=shipment_data)
-    
-    async def add_tracking_info(
+        # 注意：Magento 在成功创建 Shipment 后，直接返回 Shipment ID (一个字符串)
+        # 而不是一个JSON对象。我们需要相应地处理 _make_request 的期望。
+        # 暂时我们假设 _make_request 能够处理非JSON响应或在失败时抛出异常。
+        response = await self._make_request("POST", f"order/{order_id}/ship", data=shipment_data, returns_json=False)
+        return str(response) # 返回 Shipment ID
+
+    async def add_tracking_info_to_shipment(
         self,
-        order_id: int,
+        shipment_id: str,
         tracking_number: str,
         carrier_code: str,
         title: str
     ) -> Dict[str, Any]:
-        """添加跟踪信息"""
+        """为指定的Shipment添加跟踪信息"""
         tracking_data = {
             "entity": {
-                "order_id": order_id,
-                "parent_id": order_id,
+                "shipment_id": shipment_id,
                 "track_number": tracking_number,
                 "carrier_code": carrier_code,
                 "title": title
             }
         }
-        return await self._make_request("POST", f"/orders/{order_id}/tracks", data=tracking_data)
-    
+        return await self._make_request("POST", "/shipment/track", data=tracking_data)
+
+    async def get_order_items_for_shipment(self, order_id: int) -> List[Dict[str, Any]]:
+        """获取订单中可用于创建Shipment的商品项"""
+        order_data = await self.get_order(order_id)
+        items_for_shipment = []
+        for item in order_data.get("items", []):
+            # 只有尚未发货且是简单商品的项目才能被添加到Shipment中
+            if item.get("qty_ordered", 0) > item.get("qty_shipped", 0) and item.get("product_type") == "simple":
+                items_for_shipment.append(
+                    {
+                        "order_item_id": item["item_id"],
+                        "qty": item["qty_ordered"] - item["qty_shipped"],
+                    }
+                )
+        return items_for_shipment
+
     # 客户相关接口
     async def get_customer(self, customer_id: int) -> Dict[str, Any]:
         """获取客户信息"""
@@ -389,7 +407,9 @@ class MagentoClient:
             data = {"childSku": child_sku}
             
             # Magento API的这个端点在成功时返回 "true"
-            response = await self._make_request("POST", endpoint, data=data)
+            response = await self._make_request(
+                "POST", endpoint, data=data, returns_json=False
+            )
             
             # 确认响应是布尔值true
             if isinstance(response, bool) and response:
@@ -421,6 +441,23 @@ class MagentoClient:
                 error=str(e)
             )
             raise e
+
+    async def link_simple_to_configurable(self, parent_sku: str, child_skus: List[str]) -> bool:
+        """
+        将多个简单商品批量关联到可配置商品
+        注意：此功能在标准Magento 2 API中可能没有直接的批量端点。
+        我们将通过循环调用单个链接API来实现。
+        在生产环境中，可能需要一个自定义的Magento扩展来优化此操作。
+        """
+        try:
+            for child_sku in child_skus:
+                await self.assign_child_to_configurable_product(parent_sku, child_sku)
+                # 在每个API调用之间短暂暂停，以避免潜在的速率限制或服务器过载
+                await asyncio.sleep(0.2)
+            return True
+        except Exception as e:
+            logger.error("Failed during bulk linking of simple products", parent_sku=parent_sku, error=str(e))
+            return False
     
     # 其他接口
     async def get_categories(self) -> Dict[str, Any]:

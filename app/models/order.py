@@ -19,6 +19,7 @@ class OrderStatus(str, Enum):
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
     FAILED = "failed"
+    MANUAL_REVIEW_REQUIRED = "manual_review_required"
 
 
 class OrderMapping(Base):

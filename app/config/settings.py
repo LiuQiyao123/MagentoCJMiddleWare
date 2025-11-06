@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = Field(default=100, description="批处理大小")
     MAX_RETRY_ATTEMPTS: int = Field(default=3, description="最大重试次数")
     RETRY_DELAY: int = Field(default=5000, description="重试延迟（毫秒）")
+    LOGISTICS_STRATEGY: str = Field(
+        default="cheapest", 
+        description="物流选择策略 (例如 'cheapest', 'fastest')"
+    )
     
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")

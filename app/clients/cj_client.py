@@ -822,37 +822,22 @@ class CJClient:
         )
     
     # 订单相关接口
-    async def create_order(
-        self,
-        order_number: str,
-        products: List[CJOrderItem],
-        shipping_address: CJShippingAddress,
-        remark: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def create_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
         """创建订单"""
-        order_data = {
-            "orderNumber": order_number,
-            "shippingAddress": shipping_address.dict(),
-            "products": [item.dict() for item in products]
-        }
-        
-        if remark:
-            order_data["remark"] = remark
-            
         return await self._make_rate_limited_request(
-            "POST", 
-            "/shopping/order/createOrder", 
-            APIEndpoint.ORDER_CREATE, 
+            "POST",
+            "/order/createOrder",
+            APIEndpoint.ORDER_CREATE,
             data=order_data
         )
     
     async def get_order_detail(self, order_id: str) -> Dict[str, Any]:
         """获取订单详情"""
         return await self._make_rate_limited_request(
-            "GET", 
-            "/shopping/order/getOrderDetail", 
-            APIEndpoint.ORDER_DETAIL, 
-            params={"orderId": order_id}
+            "GET",
+            "/order/getOrderDetail",
+            APIEndpoint.ORDER_DETAIL,
+            params={"orderId": order_id},
         )
     
     async def get_order_list(

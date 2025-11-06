@@ -9,15 +9,18 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.cj_client import get_cj_client, CJClient
+from app.clients.cj_client import get_cj_client, CJClient, CJShippingAddress
 from app.clients.magento_client import get_magento_client, MagentoClient
 from app.config.database import get_db
 from app.models.order import OrderMapping, OrderStatus
 from app.models.product import ProductMapping, SyncStatus
 from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
+from app.config.settings import get_settings
+from app.utils.country_codes import is_valid_country_code
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 
 class OrderSyncError(APIException):
@@ -143,8 +146,19 @@ class OrderSyncService:
         
         try:
             # 构建CJ订单数据
-            cj_order_data = await self._build_cj_order(magento_order)
-            
+            cj_order_data, unmapped_skus = await self._build_cj_order(magento_order)
+
+            # 如果存在未映射的SKU，则将订单标记为需要人工审核
+            if unmapped_skus:
+                await self._mark_order_for_manual_review(
+                    order_id, order_increment_id, unmapped_skus
+                )
+                raise OrderSyncError(
+                    error_code="UNMAPPED_SKUS_FOUND",
+                    message=f"Order {order_increment_id} has unmapped SKUs.",
+                    details={"unmapped_skus": unmapped_skus},
+                )
+
             # 创建CJ订单
             cj_response = await self.cj_client.create_order(cj_order_data)
             cj_order_id = cj_response.get("data", {}).get("orderId")
@@ -196,9 +210,10 @@ class OrderSyncService:
                 await session.commit()
             raise
     
-    async def _build_cj_order(self, magento_order: Dict[str, Any]) -> Dict[str, Any]:
+    async def _build_cj_order(self, magento_order: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
         """构建CJ订单数据"""
         order_items = []
+        unmapped_skus = []
         
         # 处理订单项
         for item in magento_order.get("items", []):
@@ -215,7 +230,7 @@ class OrderSyncService:
                         order_items.append({
                             "vid": product_mapping.cj_variant_id,
                             "quantity": int(item["qty_ordered"]),
-                            "shippingMethod": "CJ_STANDARD"  # 默认物流方式
+                            # "shippingMethod": "CJ_STANDARD"  # 默认物流方式 - 将被替换
                         })
                     else:
                         logger.warning(
@@ -223,6 +238,7 @@ class OrderSyncService:
                             sku=item["sku"],
                             order_id=magento_order["increment_id"]
                         )
+                        unmapped_skus.append(item["sku"])
         
         if not order_items:
             raise OrderSyncError(
@@ -236,6 +252,15 @@ class OrderSyncService:
         
         if not shipping_address:
             shipping_address = magento_order.get("billing_address", {})
+
+        # 动态获取物流方式
+        chosen_shipping_method = await self._get_optimal_shipping_method(
+            order_items, shipping_address
+        )
+
+        # 为所有订单项设置选定的物流方式
+        for item in order_items:
+            item["shippingMethod"] = chosen_shipping_method
         
         cj_order = {
             "orderNumber": magento_order["increment_id"],
@@ -256,7 +281,126 @@ class OrderSyncService:
             "remark": f"Magento Order: {magento_order['increment_id']}"
         }
         
-        return cj_order
+        return cj_order, unmapped_skus
+
+    async def _mark_order_for_manual_review(
+        self, magento_order_id: str, magento_order_increment_id: str, unmapped_skus: List[str]
+    ):
+        """将订单标记为需要人工审核"""
+        async for session in get_db():
+            try:
+                # 检查是否已存在记录
+                stmt = select(OrderMapping).where(
+                    OrderMapping.magento_order_id == str(magento_order_id)
+                )
+                result = await session.execute(stmt)
+                existing_mapping = result.scalar_one_or_none()
+
+                if existing_mapping:
+                    logger.info("Order mapping already exists for manual review.", order_id=magento_order_increment_id)
+                    return
+
+                # 创建新的订单映射记录
+                note = f"Failed to sync due to unmapped SKUs: {', '.join(unmapped_skus)}"
+                mapping = OrderMapping(
+                    magento_order_id=str(magento_order_id),
+                    magento_order_increment_id=magento_order_increment_id,
+                    cj_order_id=None,  # 没有CJ订单ID
+                    order_status=OrderStatus.MANUAL_REVIEW_REQUIRED,
+                    notes=note,
+                    created_at=datetime.utcnow(),
+                    last_sync_at=datetime.utcnow(),
+                )
+
+                session.add(mapping)
+                await session.commit()
+                logger.warning(
+                    "Order marked for manual review due to unmapped SKUs.",
+                    order_id=magento_order_increment_id,
+                    unmapped_skus=unmapped_skus,
+                )
+            except Exception as e:
+                logger.error("Failed to mark order for manual review", order_id=magento_order_increment_id, error=str(e))
+                await session.rollback()
+            finally:
+                await session.close()
+
+
+    async def _get_optimal_shipping_method(
+        self, order_items: List[Dict[str, Any]], shipping_address: Dict[str, Any]
+    ) -> str:
+        """获取最优物流方式"""
+        country_code = shipping_address.get("country_id", "")
+        if not is_valid_country_code(country_code):
+            raise OrderSyncError(
+                error_code="INVALID_COUNTRY_CODE",
+                message=f"The destination country code '{country_code}' is not supported by CJ.",
+                details={"country_code": country_code},
+            )
+
+        # 准备CJ运费计算API所需参数
+        products_for_shipping = [
+            {"vid": item["vid"], "quantity": item["quantity"]} for item in order_items
+        ]
+        province = shipping_address.get("region", "")
+
+        # 调用CJ API获取可用物流选项
+        shipping_options_response = await self.cj_client.get_shipping_cost(
+            products=products_for_shipping,
+            country_code=country_code,
+            province=province,
+        )
+
+        # 步骤 1: 验证API调用是否成功
+        if not shipping_options_response.get("result"):
+            raise OrderSyncError(
+                error_code="CJ_SHIPPING_API_ERROR",
+                message="CJ shipping cost API call failed.",
+                details={"cj_response": shipping_options_response},
+            )
+
+        # 步骤 2: 验证数据内容
+        shipping_options = shipping_options_response.get("data")
+        if not shipping_options or not isinstance(shipping_options, list):
+            raise OrderSyncError(
+                error_code="NO_SHIPPING_METHODS_FOUND",
+                message="No available shipping methods were returned by CJ for this order.",
+                details={
+                    "country_code": country_code,
+                    "province": province,
+                },
+            )
+
+        # 根据策略选择物流方式
+        if settings.LOGISTICS_STRATEGY == "cheapest":
+            chosen_method = min(shipping_options, key=lambda x: x.get("logisticsPrice", float('inf')))
+        elif settings.LOGISTICS_STRATEGY == "fastest":
+            # 注意：logisticsAging可能是 "5-10" 这样的字符串，需要解析
+            def get_min_days(aging_str):
+                try:
+                    return int(aging_str.split('-')[0])
+                except (ValueError, IndexError):
+                    return float('inf')
+            chosen_method = min(shipping_options, key=lambda x: get_min_days(x.get("logisticsAging", "")))
+        else: # 默认使用cheapest
+            chosen_method = min(shipping_options, key=lambda x: x.get("logisticsPrice", float('inf')))
+
+        chosen_method_name = chosen_method.get("logisticsName")
+        if not chosen_method_name:
+            raise OrderSyncError(
+                error_code="SHIPPING_METHOD_NAME_MISSING",
+                message="Could not determine shipping method name from optimal choice.",
+                details={"chosen_method_data": chosen_method}
+            )
+            
+        logger.info(
+            "Optimal shipping method selected",
+            strategy=settings.LOGISTICS_STRATEGY,
+            method_name=chosen_method_name,
+            price=chosen_method.get("logisticsPrice"),
+            aging=chosen_method.get("logisticsAging"),
+        )
+        return chosen_method_name
     
     async def update_order_status(self, hours_back: int = 72) -> Dict[str, Any]:
         """更新订单状态"""
@@ -285,10 +429,10 @@ class OrderSyncService:
                 for mapping in order_mappings:
                     try:
                         # 获取CJ订单状态
-                        cj_order_status = await self.cj_client.get_order_status(mapping.cj_order_id)
+                        cj_order_detail = await self.cj_client.get_order_detail(mapping.cj_order_id)
                         
-                        status_data = cj_order_status.get("data", {})
-                        new_status = self._map_cj_status_to_local(status_data.get("status"))
+                        status_data = cj_order_detail.get("data", [{}])[0]
+                        new_status = self._map_cj_status_to_local(status_data.get("orderStatus"))
                         
                         if new_status != mapping.order_status:
                             # 更新订单状态
@@ -306,7 +450,7 @@ class OrderSyncService:
                                 await self._update_magento_tracking(
                                     mapping.magento_order_id,
                                     status_data.get("trackingNumber"),
-                                    status_data.get("shippingMethod", "CJ_STANDARD")
+                                    status_data.get("shippingMethodName", "CJ_STANDARD")
                                 )
                             
                             sync_result["updated"] += 1
@@ -369,15 +513,39 @@ class OrderSyncService:
     ) -> None:
         """更新Magento订单跟踪信息"""
         try:
-            await self.magento_client.add_tracking_info(
-                order_id=int(magento_order_id),
+            order_id_int = int(magento_order_id)
+
+            # 1. 获取可发货的订单项
+            items_for_shipment = await self.magento_client.get_order_items_for_shipment(order_id_int)
+            if not items_for_shipment:
+                logger.warning("No items to ship for order, skipping shipment creation.", order_id=magento_order_id)
+                return
+
+            # 2. 创建Shipment
+            shipment_id = await self.magento_client.create_shipment(
+                order_id=order_id_int,
+                items=items_for_shipment
+            )
+
+            if not shipment_id:
+                raise OrderSyncError(
+                    error_code="MAGENTO_SHIPMENT_CREATION_FAILED",
+                    message="Failed to create shipment in Magento, received empty shipment ID.",
+                    details={"magento_order_id": magento_order_id}
+                )
+
+            logger.info("Shipment created in Magento", order_id=magento_order_id, shipment_id=shipment_id)
+
+            # 3. 为Shipment添加跟踪信息
+            await self.magento_client.add_tracking_info_to_shipment(
+                shipment_id=shipment_id,
                 tracking_number=tracking_number,
-                carrier_code="cj_dropshipping",
+                carrier_code="custom", # 使用 'custom' 作为通用 carrier code
                 title=f"CJ Dropshipping - {shipping_method}"
             )
             
             logger.info(
-                "Tracking info added to Magento",
+                "Tracking info added to Magento shipment",
                 order_id=magento_order_id,
                 tracking_number=tracking_number
             )

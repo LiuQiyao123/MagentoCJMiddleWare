@@ -19,6 +19,8 @@ class ProductSyncSingleRequest(BaseModel):
     """单商品同步请求模型"""
     product_url: str = Field(..., description="CJ商品链接")
     category_id: Optional[int] = Field(None, description="Magento分类ID，可选")
+    retail_price: float = Field(..., gt=0, description="在Magento中设置的零售价格")
+    attribute_set_id: int = Field(..., description="在Magento中为Dropshipping商品配置的属性集ID")
 
 
 class InventorySyncRequest(BaseModel):
@@ -55,7 +57,9 @@ async def sync_single_product(
         result = await product_sync_service.sync_single_product(
             product_id=product_id,
             product_url=request.product_url,
-            category_id=request.category_id
+            category_id=request.category_id,
+            retail_price=request.retail_price,
+            attribute_set_id=request.attribute_set_id
         )
         
         return {
