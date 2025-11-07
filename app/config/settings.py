@@ -91,10 +91,6 @@ class Settings(BaseSettings):
     VERIFY_SSL: bool = Field(default=True, description="是否验证SSL证书")
     SSL_CERT_PATH: Optional[str] = Field(default=None, description="SSL证书路径")
     
-    # Celery配置
-    CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", description="Celery Broker URL")
-    CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2", description="Celery Result Backend URL")
-    
     # CORS和安全配置
     ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000", "http://127.0.0.1:3000"], description="允许的源")
     ALLOWED_HOSTS: List[str] = Field(default=["localhost", "127.0.0.1"], description="允许的主机")

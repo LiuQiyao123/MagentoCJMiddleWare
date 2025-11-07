@@ -15,6 +15,8 @@ logger = structlog.get_logger(__name__)
 STREAM_KEY = "stream:orders"
 GROUP = "order_workers"
 CONSUMER = "worker-1"
+MAX_RETRIES = 3
+DEAD_LETTER_QUEUE_KEY = "dead_letter_queue:orders"
 
 
 async def ensure_group():
@@ -76,9 +78,38 @@ async def worker_loop():
                     try:
                         await process_message(message_id, data)
                         await redis.xack(STREAM_KEY, GROUP, message_id)
-                    except Exception:
-                        # 失败消息不 ack，可配置死信或重试
-                        pass
+                    except Exception as e:
+                        logger.error("Message processing failed", message_id=message_id, error=str(e))
+                        
+                        # 检查重试次数
+                        retry_count_key = f"retry_count:{message_id}"
+                        current_retries = await redis.incr(retry_count_key)
+                        
+                        if current_retries >= MAX_RETRIES:
+                            logger.critical(
+                                "Message moved to dead-letter queue after max retries",
+                                message_id=message_id,
+                                retries=current_retries
+                            )
+                            # 移入死信队列
+                            dead_letter_message = json.dumps({
+                                "message_id": message_id,
+                                "data": data,
+                                "error": str(e),
+                                "failed_at": datetime.utcnow().isoformat()
+                            })
+                            await redis.lpush(DEAD_LETTER_QUEUE_KEY, dead_letter_message)
+                            
+                            # 从重试计数中清理并确认消息
+                            await redis.delete(retry_count_key)
+                            await redis.xack(STREAM_KEY, GROUP, message_id)
+                        else:
+                            # 未达到最大重试次数，不确认消息，等待下次投递
+                            logger.warning(
+                                "Message will be retried",
+                                message_id=message_id,
+                                attempt=current_retries
+                            )
             await asyncio.sleep(0.1)
 
 

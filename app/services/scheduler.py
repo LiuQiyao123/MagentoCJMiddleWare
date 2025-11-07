@@ -23,6 +23,7 @@ class SchedulerManager:
         self._running = False
         self._tasks = {}
         self._scheduler_task = None
+        self._running_tasks = set()  # 用于跟踪正在运行的任务
     
     async def initialize(self) -> None:
         """初始化调度器"""
@@ -159,11 +160,16 @@ class SchedulerManager:
                         continue
                     
                     if now >= task_info['next_run']:
+                        # 检查任务是否已在运行
+                        if task_name in self._running_tasks:
+                            logger.warning(f"Task {task_name} is still running, skipping this scheduled run.")
+                            continue
+
                         # 执行任务
                         asyncio.create_task(self._execute_task(task_name, task_info))
                         
-                        # 更新下次执行时间
-                        task_info['next_run'] = now + task_info['interval']
+                        # 更新下次执行时间，防止漂移
+                        task_info['next_run'] = task_info['next_run'] + task_info['interval']
                         task_info['last_run'] = now
                 
                 # 等待1秒后再次检查
@@ -179,6 +185,7 @@ class SchedulerManager:
         """执行定时任务"""
         try:
             logger.info(f"Executing scheduled task: {task_name}")
+            self._running_tasks.add(task_name)
             
             # 执行任务函数
             if asyncio.iscoroutinefunction(task_info['func']):
@@ -190,6 +197,8 @@ class SchedulerManager:
             
         except Exception as e:
             logger.error(f"Error executing scheduled task {task_name}: {e}")
+        finally:
+            self._running_tasks.remove(task_name)
     
     async def _sync_orders_task(self) -> None:
         """同步订单任务"""

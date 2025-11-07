@@ -6,6 +6,7 @@
 import asyncio
 import structlog
 from typing import Any, Dict, Optional
+import uuid
 
 from app.config.settings import get_settings
 from app.config.redis import redis_manager
@@ -25,6 +26,7 @@ class QueueManager:
             'order_sync': 'order_sync',
             'maintenance': 'maintenance',
         }
+        self._consumer_id = f"consumer-{uuid.uuid4()}" # 为每个实例生成唯一ID
     
     async def initialize(self) -> None:
         """初始化队列管理器"""
@@ -84,8 +86,11 @@ class QueueManager:
             logger.error(f"Failed to enqueue task to {queue_name}: {e}")
             return False
     
-    async def dequeue_task(self, queue_name: str) -> Optional[Dict[str, Any]]:
-        """从队列中取出任务"""
+    async def dequeue_task(self, queue_name: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
+        """
+        从队列中原子性地取出一个任务，并将其放入该消费者的“处理中”队列。
+        这可以防止任务因消费者崩溃而丢失。
+        """
         try:
             if not self._initialized:
                 await self.initialize()
@@ -95,17 +100,20 @@ class QueueManager:
             
             client = await redis_manager.get_client()
             
-            # 从队列中取出任务
-            task_json = await client.brpop(f"queue:{queue_name}:tasks", timeout=1)
+            source_queue = f"queue:{queue_name}:tasks"
+            processing_queue = f"queue:{queue_name}:processing:{self._consumer_id}"
+            
+            # 原子性地移动任务
+            task_json = await client.brpoplpush(source_queue, processing_queue, timeout=timeout)
             
             if task_json:
                 import json
-                task_data = json.loads(task_json[1])
+                task_data = json.loads(task_json)
                 
                 # 更新队列统计信息
                 await self._update_queue_stats(queue_name, "dequeued")
                 
-                logger.debug(f"Task dequeued from {queue_name}", task_data=task_data)
+                logger.debug(f"Task moved to processing queue from {queue_name}", task_data=task_data)
                 return task_data
             
             return None
@@ -113,6 +121,37 @@ class QueueManager:
         except Exception as e:
             logger.error(f"Failed to dequeue task from {queue_name}: {e}")
             return None
+
+    async def acknowledge_task(self, queue_name: str, task_data: Dict[str, Any]) -> bool:
+        """
+        确认任务已成功处理，并将其从“处理中”队列中移除。
+        """
+        try:
+            if not self._initialized:
+                await self.initialize()
+
+            if queue_name not in self._queues:
+                raise ValueError(f"Unknown queue: {queue_name}")
+
+            client = await redis_manager.get_client()
+            processing_queue = f"queue:{queue_name}:processing:{self._consumer_id}"
+
+            import json
+            task_json = json.dumps(task_data)
+
+            # 从处理中队列移除已完成的任务
+            removed_count = await client.lrem(processing_queue, 1, task_json)
+
+            if removed_count > 0:
+                logger.debug(f"Task acknowledged and removed from processing queue", task_data=task_data)
+                return True
+            else:
+                logger.warning(f"Task to acknowledge not found in processing queue", task_data=task_data)
+                return False
+
+        except Exception as e:
+            logger.error(f"Failed to acknowledge task from {queue_name}: {e}")
+            return False
     
     async def get_queue_length(self, queue_name: str) -> int:
         """获取队列长度"""

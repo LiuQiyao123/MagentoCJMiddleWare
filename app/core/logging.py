@@ -99,11 +99,6 @@ def setup_logging() -> None:
                 "level": "INFO",
                 "propagate": False,
             },
-            "celery": {
-                "handlers": ["console", "file"],
-                "level": "INFO",
-                "propagate": False,
-            },
             "sqlalchemy": {
                 "handlers": ["console", "file"],
                 "level": "WARNING",

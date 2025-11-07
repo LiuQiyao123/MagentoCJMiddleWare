@@ -17,6 +17,7 @@ from app.models.token import TokenStorage
 # 延迟导入以避免循环导入
 # from app.clients.cj_client import CJClient
 from app.core.exceptions import APIException
+from app.utils.distributed_lock import AsyncDistributedLock
 
 logger = structlog.get_logger(__name__)
 
@@ -80,46 +81,61 @@ class CJTokenManager:
             self.cj_client = None
     
     async def get_valid_token(self) -> str:
-        """获取有效的access token"""
-        current_time = time.time()
-        
-        # 检查是否需要检查token状态
-        if current_time - self._last_check_time < self._check_interval:
-            if self._token_info and self._is_access_token_valid():
-                return self._token_info.access_token
-        
-        # 更新检查时间
-        self._last_check_time = current_time
-        
-        # 检查并更新token
-        await self._ensure_valid_token()
-        
-        if not self._token_info:
+        """获取有效的access token，包含分布式锁以处理并发"""
+        # 快速路径检查：如果内存中的token有效且无需刷新，直接返回
+        if self._token_info and self._is_access_token_valid() and not self._should_update_access_token():
+            return self._token_info.access_token
+
+        # 慢速路径：需要检查或更新token，使用分布式锁
+        lock_key = "cj_token_refresh"
+        try:
+            async with AsyncDistributedLock(lock_key):
+                logger.debug("Acquired lock for token refresh", lock_key=lock_key)
+                
+                # 双重检查锁定：获取锁后，再次检查token状态
+                # 因为在等待锁的过程中，可能已有另一个进程完成了更新
+                await self._load_token_from_db()
+                
+                if self._token_info and self._is_access_token_valid() and not self._should_update_access_token():
+                    logger.debug("Token already refreshed by another process.")
+                    return self._token_info.access_token
+                
+                # 确认需要更新，执行更新逻辑
+                logger.info("Proceeding with token refresh under lock.")
+                await self._ensure_valid_token_under_lock()
+
+        except TimeoutError:
+            logger.error("Could not acquire lock for token refresh, will use stale token if available.")
+            # 如果获取锁超时，尝试使用可能过期的内存中的token，或者重新从DB加载一次
+            if not self._token_info:
+                await self._load_token_from_db()
+
+        if not self._token_info or not self._token_info.access_token:
             raise APIException(
-                message="No valid token available",
+                message="No valid token available after checking",
                 error_code="TOKEN_NOT_AVAILABLE"
             )
         
         return self._token_info.access_token
     
-    async def _ensure_valid_token(self) -> None:
-        """确保token有效"""
-        # 如果没有token信息，从数据库加载
-        if not self._token_info:
-            await self._load_token_from_db()
+    async def _ensure_valid_token_under_lock(self) -> None:
+        """确保token有效（此方法应在分布式锁内调用）"""
+        # 注意：调用此方法前，应已从数据库加载了最新的token状态
+        # (在 get_valid_token 的锁内已通过 _load_token_from_db 完成)
         
         # 如果仍然没有token，获取新token
         if not self._token_info:
             await self._get_new_token()
             return
-        
+
+        # 检查refresh token是否需要更新 (优先级更高)
+        if self._should_update_refresh_token():
+            await self._update_refresh_token()
+            return  # 获取新token后，access token也已是最新，无需再更新
+
         # 检查access token是否需要更新
         if self._should_update_access_token():
             await self._update_access_token()
-        
-        # 检查refresh token是否需要更新
-        if self._should_update_refresh_token():
-            await self._update_refresh_token()
     
     def _is_access_token_valid(self) -> bool:
         """检查access token是否有效"""
