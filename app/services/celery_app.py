@@ -176,7 +176,7 @@ def health_check(self) -> Dict[str, Any]:
         except Exception as e:
             health_status['database'] = f'unhealthy: {e}'
         
-        logger.info("Health check completed", health_status=health_status)
+        logger.info("Health check completed", extra={"health_status": health_status})
         
         return health_status
         
@@ -191,9 +191,11 @@ def task_success_handler(sender=None, result=None, **kwargs):
     """任务成功处理"""
     logger.info(
         "Task completed successfully",
-        task_id=sender.request.id if sender else None,
-        task_name=sender.name if sender else None,
-        result=result
+        extra={
+            "task_id": sender.request.id if sender else None,
+            "task_name": sender.name if sender else None,
+            "result": result
+        }
     )
 
 
@@ -202,11 +204,13 @@ def task_failure_handler(sender=None, task_id=None, exception=None, args=None, k
     """任务失败处理"""
     logger.error(
         "Task failed",
-        task_id=task_id,
-        task_name=sender.name if sender else None,
-        exception=str(exception),
-        args=args,
-        kwargs=kwargs
+        extra={
+            "task_id": task_id,
+            "task_name": sender.name if sender else None,
+            "exception": str(exception),
+            "args": args,
+            "kwargs": kwargs
+        }
     )
 
 
@@ -215,11 +219,13 @@ def task_revoked_handler(sender=None, request=None, terminated=None, signum=None
     """任务撤销处理"""
     logger.warning(
         "Task revoked",
-        task_id=request.id if request else None,
-        task_name=sender.name if sender else None,
-        terminated=terminated,
-        signum=signum,
-        expired=expired
+        extra={
+            "task_id": request.id if request else None,
+            "task_name": sender.name if sender else None,
+            "terminated": terminated,
+            "signum": signum,
+            "expired": expired
+        }
     )
 
 

@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.cj_client import get_cj_client, CJClient
 from app.clients.magento_client import get_magento_client, MagentoClient
 from app.config.database import get_db
-from app.models.order import OrderMapping, OrderStatus
-from app.models.product import ProductMapping, SyncStatus
+from app.models.order import Order as OrderMapping, OrderStatus
+from app.models.product import Product as ProductMapping, SyncStatus as ProductSyncStatus
 from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
 
@@ -39,7 +39,7 @@ class OrderSyncService:
             self.magento_client = await get_magento_client()
             logger.info("Order sync service initialized successfully")
         except Exception as e:
-            logger.error("Failed to initialize order sync service", error=str(e))
+            logger.error("Failed to initialize order sync service", extra={"error": str(e)})
             raise OrderSyncError(
                 error_code="ORDER_SYNC_INIT_ERROR",
                 message="Failed to initialize order sync service",
@@ -101,8 +101,10 @@ class OrderSyncService:
                 except Exception as e:
                     logger.error(
                         "Failed to sync order to CJ",
-                        order_id=order.get("increment_id"),
-                        error=str(e)
+                        extra={
+                            "order_id": order.get("increment_id"),
+                            "error": str(e)
+                        }
                     )
                     sync_result["failed"] += 1
                     sync_result["errors"].append({
@@ -119,7 +121,7 @@ class OrderSyncService:
             return sync_result
             
         except Exception as e:
-            logger.error("Order sync failed", error=str(e))
+            logger.error("Order sync failed", extra={"error": str(e)})
             raise OrderSyncError(
                 error_code="ORDER_SYNC_ERROR",
                 message="Failed to sync orders to CJ",
@@ -210,8 +212,10 @@ class OrderSyncService:
                     else:
                         logger.warning(
                             "Product mapping not found for SKU",
-                            sku=item["sku"],
-                            order_id=magento_order["increment_id"]
+                            extra={
+                                "sku": item["sku"],
+                                "order_id": magento_order["increment_id"]
+                            }
                         )
         
         if not order_items:
@@ -311,8 +315,10 @@ class OrderSyncService:
                     except Exception as e:
                         logger.error(
                             "Failed to update order status",
-                            order_id=mapping.magento_order_increment_id,
-                            error=str(e)
+                            extra={
+                                "order_id": mapping.magento_order_increment_id,
+                                "error": str(e)
+                            }
                         )
                         sync_result["failed"] += 1
                         sync_result["errors"].append({
@@ -331,7 +337,7 @@ class OrderSyncService:
             return sync_result
             
         except Exception as e:
-            logger.error("Order status update failed", error=str(e))
+            logger.error("Order status update failed", extra={"error": str(e)})
             raise OrderSyncError(
                 error_code="ORDER_STATUS_UPDATE_ERROR",
                 message="Failed to update order status",
@@ -375,9 +381,11 @@ class OrderSyncService:
         except Exception as e:
             logger.error(
                 "Failed to add tracking info to Magento",
-                order_id=magento_order_id,
-                tracking_number=tracking_number,
-                error=str(e)
+                extra={
+                    "order_id": magento_order_id,
+                    "tracking_number": tracking_number,
+                    "error": str(e)
+                }
             )
     
     async def cancel_order(self, magento_order_id: str, reason: str = "Customer request") -> Dict[str, Any]:
@@ -446,7 +454,7 @@ class OrderSyncService:
                 }
                 
         except Exception as e:
-            logger.error("Failed to cancel order", magento_order_id=magento_order_id, error=str(e))
+            logger.error("Failed to cancel order", extra={"magento_order_id": magento_order_id, "error": str(e)})
             raise OrderSyncError(
                 error_code="ORDER_CANCEL_ERROR",
                 message="Failed to cancel order",

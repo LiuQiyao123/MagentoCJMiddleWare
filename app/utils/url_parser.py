@@ -45,12 +45,12 @@ def extract_product_id_from_url(url: str) -> str:
             raise ValueError(f"无法从URL中提取商品ID: {url}")
         
         product_id = match.group(1)
-        logger.info("成功从URL提取商品ID", url=url, product_id=product_id)
+        logger.info("成功从URL提取商品ID", extra={"url": url, "product_id": product_id})
         
         return product_id
         
     except Exception as e:
-        logger.error("URL解析失败", url=url, error=str(e))
+        logger.error("URL解析失败", extra={"url": url, "error": str(e)})
         raise ValueError(f"URL解析失败: {str(e)}")
 
 

@@ -1,12 +1,12 @@
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS magento_cj_middleware CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS magento_cj CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 使用数据库
-USE magento_cj_middleware;
+USE magento_cj;
 
 -- 创建用户并授权（如果不存在）
-CREATE USER IF NOT EXISTS 'magento_user'@'%' IDENTIFIED BY 'magento123456';
-GRANT ALL PRIVILEGES ON magento_cj_middleware.* TO 'magento_user'@'%';
+CREATE USER IF NOT EXISTS 'magento_user'@'%' IDENTIFIED BY 'strong_password';
+GRANT ALL PRIVILEGES ON magento_cj.* TO 'magento_user'@'%';
 FLUSH PRIVILEGES;
 
 -- 设置字符集

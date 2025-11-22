@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.cj_client import get_cj_client, CJClient
 from app.clients.magento_client import get_magento_client, MagentoClient
 from app.config.database import get_db
-from app.models.product import ProductMapping, SyncStatus as ProductSyncStatus
+from app.models.product import Product as ProductMapping, SyncStatus as ProductSyncStatus
 from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
 
@@ -38,7 +38,7 @@ class ProductSyncService:
             self.magento_client = await get_magento_client()
             logger.info("Product sync service initialized successfully")
         except Exception as e:
-            logger.error("Failed to initialize product sync service", error=str(e))
+            logger.error("Failed to initialize product sync service", extra={"error": str(e)})
             raise ProductSyncError(
                 error_code="SYNC_INIT_ERROR",
                 message="Failed to initialize product sync service",
@@ -97,8 +97,10 @@ class ProductSyncService:
                     except Exception as e:
                         logger.error(
                             "Failed to sync product from CJ",
-                            product_id=product.get("pid"),
-                            error=str(e)
+                            extra={
+                                "product_id": product.get("pid"),
+                                "error": str(e)
+                            }
                         )
                         sync_result["failed"] += 1
                         sync_result["errors"].append({
@@ -121,7 +123,7 @@ class ProductSyncService:
             return sync_result
             
         except Exception as e:
-            logger.error("CJ product sync failed", error=str(e))
+            logger.error("CJ product sync failed", extra={"error": str(e)})
             raise ProductSyncError(
                 error_code="CJ_SYNC_ERROR",
                 message="Failed to sync products from CJ",
@@ -310,8 +312,10 @@ class ProductSyncService:
                 except Exception as e:
                     logger.error(
                         "Failed to sync inventory for product",
-                        product_id=mapping.cj_product_id,
-                        error=str(e)
+                        extra={
+                            "product_id": mapping.cj_product_id,
+                            "error": str(e)
+                        }
                     )
                     sync_result["failed"] += 1
                     sync_result["errors"].append({
@@ -323,12 +327,12 @@ class ProductSyncService:
                 
                 # 添加延迟避免API限制
                 await asyncio.sleep(0.2)
-            
-            logger.info("Inventory sync completed", result=sync_result)
-            return sync_result
+                
+                logger.info("Inventory sync completed", extra={"result": sync_result})
+                return sync_result
             
         except Exception as e:
-            logger.error("Inventory sync failed", error=str(e))
+            logger.error("Inventory sync failed", extra={"error": str(e)})
             raise ProductSyncError(
                 error_code="INVENTORY_SYNC_ERROR",
                 message="Failed to sync inventory from CJ",
@@ -355,6 +359,10 @@ class ProductSyncService:
         import time
         from app.config.settings import get_settings
         
+        # 确保服务已初始化
+        if not self.cj_client or not self.magento_client:
+            await self.initialize()
+        
         start_time = time.time()
         settings = get_settings()
         
@@ -362,9 +370,13 @@ class ProductSyncService:
             logger.info("开始同步单个商品", product_id=product_id)
             
             # 1. 从CJ获取商品详情
-            cj_product = await self.cj_client.get_product_detail(product_id)
+            cj_response = await self.cj_client.get_product_detail(product_id)
+            if not cj_response or not cj_response.get("result"):
+                raise ValueError(f"商品不存在或获取失败: {product_id}")
+                
+            cj_product = cj_response.get("data", {})
             if not cj_product:
-                raise ValueError(f"商品不存在: {product_id}")
+                raise ValueError(f"商品数据为空: {product_id}")
             
             # 2. 转换为Magento格式
             magento_product_data = self._build_magento_product(cj_product, [])
@@ -402,9 +414,11 @@ class ProductSyncService:
             sync_duration = int((time.time() - start_time) * 1000)
             
             logger.error("单个商品同步失败", 
-                        product_id=product_id, 
-                        error=error_message,
-                        duration_ms=sync_duration)
+                        extra={
+                            "product_id": product_id, 
+                            "error": error_message,
+                            "duration_ms": sync_duration
+                        })
             
             # 记录错误日志
             await self._log_sync_result(
@@ -469,7 +483,7 @@ class ProductSyncService:
                            success=success)
                 
         except Exception as e:
-            logger.error("记录同步日志失败", error=str(e))
+            logger.error("记录同步日志失败", extra={"error": str(e)})
     
     async def _log_sync_operation(
         self,

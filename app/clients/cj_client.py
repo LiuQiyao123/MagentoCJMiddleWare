@@ -13,6 +13,7 @@ import structlog
 from pydantic import BaseModel, Field
 
 from app.config.settings import get_settings
+from app.config.redis import redis_manager
 from app.core.exceptions import APIException
 
 logger = structlog.get_logger(__name__)
@@ -124,17 +125,25 @@ class CJClient:
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
             )
             
-            # 获取访问令牌
-            await self._authenticate()
-            
-            logger.info("CJ API client initialized successfully")
+            # 初始化 Redis (如果尚未初始化)
+            if not redis_manager._initialized:
+                try:
+                    await redis_manager.initialize()
+                except Exception as e:
+                    logger.warning(f"Redis initialization failed in CJClient: {e}")
+
+            logger.info("CJ API client initialized successfully (Lazy Auth)")
             
         except Exception as e:
-            logger.error("Failed to initialize CJ API client", error=str(e))
+            error_details = {"error": str(e)}
+            if isinstance(e, APIException):
+                error_details["original_details"] = e.details
+                
+            logger.error("Failed to initialize CJ API client", extra=error_details)
             raise CJAPIError(
                 error_code="CJ_INIT_ERROR",
                 message="Failed to initialize CJ API client",
-                details={"error": str(e)}
+                details=error_details
             )
     
     async def close(self) -> None:
@@ -144,13 +153,15 @@ class CJClient:
             self._client = None
             
     async def _authenticate(self) -> None:
-        """认证获取访问令牌"""
+        """认证获取访问令牌 (仅在无有效Token时调用)"""
         try:
             # 构造认证请求
             auth_data = {
                 "email": self.email,
                 "password": self.password
             }
+            
+            logger.info("Requesting new Access Token from CJ API")
             
             # 发送认证请求
             response = await self._client.post(
@@ -160,6 +171,7 @@ class CJClient:
             )
             
             if response.status_code != 200:
+                logger.error("CJ Auth Failed", extra={"status": response.status_code, "body": response.text})
                 raise CJAPIError(
                     error_code="CJ_AUTH_ERROR",
                     message="Failed to authenticate with CJ API",
@@ -169,38 +181,124 @@ class CJClient:
             result = response.json()
             
             if not result.get("result"):
+                logger.error("CJ Auth Logic Failed", extra={"response": result})
                 raise CJAPIError(
                     error_code="CJ_AUTH_ERROR",
                     message="Authentication failed",
                     details={"response": result}
                 )
             
-            # 保存访问令牌
-            self._access_token = result["data"]["accessToken"]
-            self._token_expires_at = datetime.now() + timedelta(seconds=result["data"]["expiresIn"])
+            data = result.get("data", {})
+            self._access_token = data["accessToken"]
+            refresh_token = data["refreshToken"]
+            
+            # 有效期: AccessToken 15天, RefreshToken 180天
+            # 减去 300秒 (5分钟) 作为安全缓冲
+            access_ttl = (15 * 24 * 3600) - 300
+            refresh_ttl = (180 * 24 * 3600) - 300
+            
+            self._token_expires_at = datetime.now() + timedelta(seconds=access_ttl)
+            
+            # 保存到 Redis
+            try:
+                await redis_manager.set("cj_api:access_token", self._access_token, expire=access_ttl)
+                await redis_manager.set("cj_api:refresh_token", refresh_token, expire=refresh_ttl)
+                logger.info("Cached CJ tokens to Redis")
+            except Exception as e:
+                logger.warning(f"Failed to cache tokens to Redis: {e}")
             
             logger.info("CJ API authentication successful")
             
         except httpx.RequestError as e:
-            logger.error("CJ API authentication network error", error=str(e))
+            logger.error("CJ API authentication network error", extra={"error": str(e)})
             raise CJAPIError(
                 error_code="CJ_NETWORK_ERROR",
                 message="Network error during authentication",
                 details={"error": str(e)}
             )
         except Exception as e:
-            logger.error("CJ API authentication error", error=str(e))
+            logger.error("CJ API authentication error", extra={"error": str(e)})
             raise
-    
-    async def _ensure_authenticated(self) -> None:
-        """确保认证状态有效"""
-        if not self._access_token or not self._token_expires_at:
-            await self._authenticate()
-            return
+
+    async def _refresh_token(self, refresh_token: str) -> None:
+        """使用 Refresh Token 刷新 Access Token"""
+        try:
+            logger.info("Refreshing Access Token using Refresh Token")
             
-        # 检查令牌是否即将过期（提前5分钟刷新）
-        if datetime.now() >= self._token_expires_at - timedelta(minutes=5):
-            await self._authenticate()
+            response = await self._client.post(
+                f"{self.base_url}/authentication/refreshAccessToken",
+                json={"refreshToken": refresh_token},
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                logger.warning("Refresh Token request failed", extra={"status": response.status_code})
+                raise CJAPIError("Refresh request failed") # 触发重新登录
+                
+            result = response.json()
+            if not result.get("result"):
+                logger.warning("Refresh Token API returned false", extra={"response": result})
+                raise CJAPIError("Refresh API returned false") # 触发重新登录
+                
+            data = result.get("data", {})
+            self._access_token = data["accessToken"]
+            new_refresh_token = data.get("refreshToken", refresh_token) # 有些接口可能不返回新的refresh token
+            
+            # 更新有效期
+            access_ttl = (15 * 24 * 3600) - 300
+            refresh_ttl = (180 * 24 * 3600) - 300 # 假设刷新也会重置 refresh token 有效期，或者保持原样
+            
+            self._token_expires_at = datetime.now() + timedelta(seconds=access_ttl)
+            
+            # 更新 Redis
+            try:
+                await redis_manager.set("cj_api:access_token", self._access_token, expire=access_ttl)
+                await redis_manager.set("cj_api:refresh_token", new_refresh_token, expire=refresh_ttl)
+                logger.info("Refreshed and cached CJ tokens")
+            except Exception as e:
+                logger.warning(f"Failed to cache refreshed tokens: {e}")
+                
+        except Exception as e:
+            logger.error(f"Token refresh failed: {e}")
+            raise # 让上层捕获并执行 _authenticate
+
+    async def _ensure_authenticated(self) -> None:
+        """确保认证状态有效 (惰性认证核心逻辑)"""
+        # 1. 内存检查
+        if self._access_token and self._token_expires_at and datetime.now() < self._token_expires_at:
+            return
+
+        # 2. Redis Access Token 检查
+        try:
+            token = await redis_manager.get("cj_api:access_token")
+            if token:
+                client = await redis_manager.get_client()
+                ttl = await client.ttl("cj_api:access_token")
+                if ttl > 300: # 有效期 > 5分钟
+                    self._access_token = token
+                    self._token_expires_at = datetime.now() + timedelta(seconds=ttl)
+                    logger.debug("Restored Access Token from Redis")
+                    return
+        except Exception as e:
+            logger.warning(f"Redis Access Token check failed: {e}")
+
+        # 3. Redis Refresh Token 检查 & 刷新
+        try:
+            refresh_token = await redis_manager.get("cj_api:refresh_token")
+            if refresh_token:
+                client = await redis_manager.get_client()
+                ttl = await client.ttl("cj_api:refresh_token")
+                if ttl > 300:
+                    try:
+                        await self._refresh_token(refresh_token)
+                        return # 刷新成功，直接返回
+                    except Exception as refresh_error:
+                        logger.warning(f"Refresh failed, falling back to login: {refresh_error}")
+        except Exception as e:
+            logger.warning(f"Redis Refresh Token check failed: {e}")
+
+        # 4. 最终手段：重新登录
+        await self._authenticate()
     
     async def _make_request(
         self,
@@ -263,7 +361,7 @@ class CJClient:
                 await asyncio.sleep(2 ** retry_count)  # 指数退避
                 return await self._make_request(method, endpoint, data, params, retry_count + 1)
             
-            logger.error("CJ API network error", error=str(e), endpoint=endpoint)
+            logger.error("CJ API network error", extra={"error": str(e), "endpoint": endpoint})
             raise CJAPIError(
                 error_code="CJ_NETWORK_ERROR",
                 message="Network error during CJ API request",
@@ -272,7 +370,7 @@ class CJClient:
         except CJAPIError:
             raise
         except Exception as e:
-            logger.error("CJ API request error", error=str(e), endpoint=endpoint)
+            logger.error("CJ API request error", extra={"error": str(e), "endpoint": endpoint})
             raise CJAPIError(
                 error_code="CJ_REQUEST_ERROR",
                 message="Unexpected error during CJ API request",
@@ -426,7 +524,7 @@ class CJClient:
             return popular_categories
             
         except Exception as e:
-            logger.error("Failed to get popular categories", error=str(e))
+            logger.error("Failed to get popular categories", extra={"error": str(e)})
             return []
     
     async def get_category_products(self, category_id: str, limit: int = 50) -> List[Dict[str, Any]]:
@@ -456,7 +554,7 @@ class CJClient:
             return products[:limit]
             
         except Exception as e:
-            logger.error(f"Failed to get products for category {category_id}", error=str(e))
+            logger.error(f"Failed to get products for category {category_id}", extra={"error": str(e)})
             return []
     
     async def get_countries(self) -> Dict[str, Any]:

@@ -7,10 +7,10 @@ services:
     container_name: magento_cj_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
-      MYSQL_DATABASE: magento_cj_middleware
-      MYSQL_USER: magento_user
-      MYSQL_PASSWORD: magento123456
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
@@ -40,22 +40,30 @@ services:
       - "3000:3000"
     environment:
       - DB_HOST=mysql
-      - DB_PORT=3306
-      - DB_NAME=magento_cj_middleware
-      - DB_USER=magento_user
-      - DB_PASSWORD=magento123456
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_DB=0
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
       - QUEUE_REDIS_HOST=redis
-      - QUEUE_REDIS_PORT=6379
-      - QUEUE_REDIS_DB=1
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - DEBUG=true
+      - QUEUE_REDIS_PORT=${QUEUE_REDIS_PORT}
+      - QUEUE_REDIS_DB=${QUEUE_REDIS_DB}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - DEBUG=${DEBUG}
       - HOST=0.0.0.0
       - PORT=3000
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - MAGENTO_BASE_URL=${MAGENTO_BASE_URL}
+      - MAGENTO_API_TOKEN=${MAGENTO_API_TOKEN}
+      - MAGENTO_API_USER=${MAGENTO_API_USER}
+      - MAGENTO_API_PASSWORD=${MAGENTO_API_PASSWORD}
+      - CJ_API_EMAIL=${CJ_API_EMAIL}
+      - CJ_API_PASSWORD=${CJ_API_PASSWORD}
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs

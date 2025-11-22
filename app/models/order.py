@@ -20,17 +20,31 @@ class SyncStatus(str, Enum):
     PROCESSING = "processing"
 
 
+class OrderStatus(str, Enum):
+    """订单状态枚举"""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
 class Order(Base):
     """订单表"""
     __tablename__ = "orders"
     
     id = Column(Integer, primary_key=True, index=True)
     magento_order_id = Column(String(255), nullable=True, index=True)
+    magento_order_increment_id = Column(String(255), nullable=True, index=True)
     cj_order_id = Column(String(255), nullable=True, index=True)
     order_number = Column(String(255), unique=True, nullable=False, index=True)
     customer_email = Column(String(255), nullable=True, index=True)
     customer_name = Column(String(255), nullable=True)
-    order_status = Column(String(50), nullable=True)
+    
+    # 使用OrderStatus枚举
+    order_status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=True)
+    
     payment_status = Column(String(50), nullable=True)
     shipping_status = Column(String(50), nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=True)
@@ -46,4 +60,4 @@ class Order(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
     def __repr__(self):
-        return f"<Order(order_number='{self.order_number}', customer_email='{self.customer_email}')>" 
+        return f"<Order(order_number='{self.order_number}', customer_email='{self.customer_email}')>"

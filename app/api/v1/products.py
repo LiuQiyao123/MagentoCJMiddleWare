@@ -65,7 +65,7 @@ async def sync_single_product(
         }
         
     except Exception as e:
-        logger.error("单个商品同步失败", error=str(e), product_url=request.product_url)
+        logger.error("单个商品同步失败", extra={"error": str(e), "product_url": request.product_url})
         return {
             "success": False,
             "error": str(e),
@@ -83,7 +83,7 @@ async def sync_inventory(
         result = await product_sync_service.sync_inventory(request.product_ids)
         return {"success": True, "data": result}
     except Exception as e:
-        logger.error("库存同步失败", error=str(e))
+        logger.error("库存同步失败", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -96,5 +96,5 @@ async def get_sync_status(
         # 这里应该实现获取同步状态的逻辑
         return {"status": "completed", "progress": 100}
     except Exception as e:
-        logger.error("获取同步状态失败", error=str(e))
+        logger.error("获取同步状态失败", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e)) 

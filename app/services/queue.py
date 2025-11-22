@@ -77,7 +77,7 @@ class QueueManager:
             # 更新队列统计信息
             await self._update_queue_stats(queue_name, "enqueued")
             
-            logger.info(f"Task enqueued to {queue_name}", task_data=task_data)
+            logger.info(f"Task enqueued to {queue_name}", extra={"task_data": task_data})
             return True
             
         except Exception as e:
@@ -105,7 +105,7 @@ class QueueManager:
                 # 更新队列统计信息
                 await self._update_queue_stats(queue_name, "dequeued")
                 
-                logger.debug(f"Task dequeued from {queue_name}", task_data=task_data)
+                logger.debug(f"Task dequeued from {queue_name}", extra={"task_data": task_data})
                 return task_data
             
             return None

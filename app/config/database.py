@@ -67,7 +67,7 @@ class DatabaseManager:
             logger.info("Database initialized successfully")
             
         except Exception as e:
-            logger.error("Database initialization failed", error=str(e))
+            logger.error("Database initialization failed", extra={"error": str(e)})
             raise
     
     async def _test_connection(self) -> None:
@@ -77,7 +77,7 @@ class DatabaseManager:
                 await conn.execute(text("SELECT 1"))
             logger.info("Database connection test passed")
         except Exception as e:
-            logger.error("Database connection test failed", error=str(e))
+            logger.error("Database connection test failed", extra={"error": str(e)})
             raise
     
     async def create_tables(self) -> None:
@@ -87,7 +87,7 @@ class DatabaseManager:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("Database tables created successfully")
         except Exception as e:
-            logger.error("Failed to create database tables", error=str(e))
+            logger.error("Failed to create database tables", extra={"error": str(e)})
             raise
     
     async def cleanup(self) -> None:
@@ -102,7 +102,7 @@ class DatabaseManager:
                 logger.info("Sync database engine disposed")
                 
         except Exception as e:
-            logger.error("Error during database cleanup", error=str(e))
+            logger.error("Error during database cleanup", extra={"error": str(e)})
     
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """获取异步数据库会话"""
@@ -114,7 +114,7 @@ class DatabaseManager:
                 yield session
             except Exception as e:
                 await session.rollback()
-                logger.error("Database session error", error=str(e))
+                logger.error("Database session error", extra={"error": str(e)})
                 raise
             finally:
                 await session.close()

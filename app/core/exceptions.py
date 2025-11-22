@@ -31,10 +31,12 @@ class APIException(Exception):
         # 记录异常日志
         logger.error(
             "API Exception raised",
-            error_code=error_code,
-            message=message,
-            status_code=status_code,
-            details=details
+            extra={
+                "error_code": error_code,
+                "error_message": message,  # Renamed from message to avoid KeyError
+                "status_code": status_code,
+                "details": details
+            }
         )
 
 

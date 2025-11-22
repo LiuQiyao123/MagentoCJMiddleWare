@@ -36,7 +36,7 @@ async def sync_orders_to_cj(
     同步Magento订单到CJ
     """
     try:
-        logger.info("Starting order sync to CJ", hours_back=request.hours_back)
+        logger.info("Starting order sync to CJ", extra={"hours_back": request.hours_back})
         
         # 使用后台任务处理订单同步
         background_tasks.add_task(
@@ -52,7 +52,7 @@ async def sync_orders_to_cj(
         )
         
     except APIException as e:
-        logger.error("Order sync API error", error=str(e))
+        logger.error("Order sync API error", extra={"error": str(e)})
         raise HTTPException(
             status_code=400,
             detail={
@@ -62,7 +62,7 @@ async def sync_orders_to_cj(
             }
         )
     except Exception as e:
-        logger.error("Unexpected error in order sync", error=str(e))
+        logger.error("Unexpected error in order sync", extra={"error": str(e)})
         raise HTTPException(
             status_code=500,
             detail={"error": "Internal server error", "message": str(e)}
@@ -75,11 +75,11 @@ async def _sync_orders_background(
 ):
     """后台订单同步任务"""
     try:
-        logger.info("Background order sync started", hours_back=hours_back)
+        logger.info("Background order sync started", extra={"hours_back": hours_back})
         
         result = await order_sync_service.sync_new_orders(hours_back=hours_back)
         
-        logger.info("Background order sync completed", result=result)
+        logger.info("Background order sync completed", extra={"result": result})
         
     except Exception as e:
-        logger.error("Background order sync failed", error=str(e)) 
+        logger.error("Background order sync failed", extra={"error": str(e)}) 

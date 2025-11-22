@@ -167,6 +167,9 @@ def log_response(response_data: Dict[str, Any]) -> None:
 def log_error(error_data: Dict[str, Any]) -> None:
     """记录错误日志"""
     logger = get_logger("error")
+    # 移除可能导致冲突的 message 字段
+    if "message" in error_data:
+        error_data["error_message"] = error_data.pop("message")
     logger.error("Application Error", **error_data)
 
 

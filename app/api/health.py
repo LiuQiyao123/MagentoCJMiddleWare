@@ -19,7 +19,7 @@ from app.services.scheduler import scheduler_manager
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-health_router = APIRouter(prefix="/health", tags=["健康检查"])
+health_router = APIRouter(tags=["健康检查"])
 
 
 @health_router.get("/")

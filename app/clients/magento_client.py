@@ -83,7 +83,7 @@ class MagentoClient:
             logger.info("Magento API client initialized successfully")
             
         except Exception as e:
-            logger.error("Failed to initialize Magento API client", error=str(e))
+            logger.error("Failed to initialize Magento API client", extra={"error": str(e)})
             raise MagentoAPIError(
                 error_code="MAGENTO_INIT_ERROR",
                 message="Failed to initialize Magento API client",
@@ -114,7 +114,7 @@ class MagentoClient:
             logger.info("Magento API connection test passed")
             
         except httpx.RequestError as e:
-            logger.error("Magento API connection test failed", error=str(e))
+            logger.error("Magento API connection test failed", extra={"error": str(e)})
             raise MagentoAPIError(
                 error_code="MAGENTO_NETWORK_ERROR",
                 message="Network error during Magento API connection test",
@@ -167,7 +167,7 @@ class MagentoClient:
                 await asyncio.sleep(2 ** retry_count)  # 指数退避
                 return await self._make_request(method, endpoint, data, params, retry_count + 1)
             
-            logger.error("Magento API network error", error=str(e), endpoint=endpoint)
+            logger.error("Magento API network error", extra={"error": str(e), "endpoint": endpoint})
             raise MagentoAPIError(
                 error_code="MAGENTO_NETWORK_ERROR",
                 message="Network error during Magento API request",
@@ -176,7 +176,7 @@ class MagentoClient:
         except MagentoAPIError:
             raise
         except Exception as e:
-            logger.error("Magento API request error", error=str(e), endpoint=endpoint)
+            logger.error("Magento API request error", extra={"error": str(e), "endpoint": endpoint})
             raise MagentoAPIError(
                 error_code="MAGENTO_REQUEST_ERROR",
                 message="Unexpected error during Magento API request",

@@ -51,7 +51,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
     """Prometheus监控中间件"""
     
     async def dispatch(self, request: Request, call_next):
-        start_time = REQUEST_DURATION.time()
+        start_time = asyncio.get_event_loop().time()
         
         try:
             response = await call_next(request)
@@ -62,6 +62,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                 status=response.status_code
             ).inc()
             
+            REQUEST_DURATION.observe(asyncio.get_event_loop().time() - start_time)
+            
             return response
             
         except Exception as e:
@@ -70,9 +72,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                 endpoint=request.url.path,
                 status=500
             ).inc()
+            REQUEST_DURATION.observe(asyncio.get_event_loop().time() - start_time)
             raise
-        finally:
-            start_time.observe()
 
 
 @asynccontextmanager
@@ -102,7 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         yield
         
     except Exception as e:
-        logger.error("Application initialization failed", error=str(e))
+        logger.error("Application initialization failed", extra={"error": str(e)})
         raise
     finally:
         # 清理资源
@@ -115,7 +116,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await db_manager.cleanup()
             logger.info("Application shutdown completed")
         except Exception as e:
-            logger.error("Error during shutdown", error=str(e))
+            logger.error("Error during shutdown", extra={"error": str(e)})
 
 
 def create_app() -> FastAPI:
@@ -153,10 +154,12 @@ def create_app() -> FastAPI:
         
         logger.info(
             "Request started",
-            method=request.method,
-            path=request.url.path,
-            client_ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "client_ip": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+            }
         )
         
         try:
@@ -166,10 +169,12 @@ def create_app() -> FastAPI:
             
             logger.info(
                 "Request completed",
-                method=request.method,
-                path=request.url.path,
-                status_code=response.status_code,
-                process_time=f"{process_time:.3f}s",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "process_time": f"{process_time:.3f}s",
+                }
             )
             
             response.headers["X-Process-Time"] = str(process_time)
@@ -180,10 +185,12 @@ def create_app() -> FastAPI:
             
             logger.error(
                 "Request failed",
-                method=request.method,
-                path=request.url.path,
-                error=str(e),
-                process_time=f"{process_time:.3f}s",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "error": str(e),
+                    "process_time": f"{process_time:.3f}s",
+                }
             )
             raise
     
@@ -192,10 +199,12 @@ def create_app() -> FastAPI:
     async def api_exception_handler(request: Request, exc: APIException):
         logger.error(
             "API Exception",
-            path=request.url.path,
-            error_code=exc.error_code,
-            message=exc.message,
-            details=exc.details,
+            extra={
+                "path": request.url.path,
+                "error_code": exc.error_code,
+                "error_message": exc.message,
+                "details": exc.details,
+            }
         )
         
         return JSONResponse(
@@ -213,9 +222,11 @@ def create_app() -> FastAPI:
     async def general_exception_handler(request: Request, exc: Exception):
         logger.error(
             "Unhandled exception",
-            path=request.url.path,
-            error=str(exc),
-            exc_info=True,
+            extra={
+                "path": request.url.path,
+                "error": str(exc),
+                "exc_info": True,
+            }
         )
         
         return JSONResponse(
