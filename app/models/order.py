@@ -1,61 +1,49 @@
 """
-订单映射数据模型
+订单数据模型
 """
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional
+from decimal import Decimal
 
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, Text, JSON, Index, Float
+from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, Text, Index, Numeric, JSON
 from sqlalchemy.sql import func
 
-from app.config.database import Base
+from app.models import Base
 
 
-class OrderStatus(str, Enum):
-    """订单状态枚举"""
+class SyncStatus(str, Enum):
+    """同步状态枚举"""
     PENDING = "pending"
-    PROCESSING = "processing"
-    SHIPPED = "shipped"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
+    SYNCED = "synced"
     FAILED = "failed"
+    PROCESSING = "processing"
 
 
-class OrderMapping(Base):
-    """订单映射表"""
-    __tablename__ = "order_mappings"
+class Order(Base):
+    """订单表"""
+    __tablename__ = "orders"
     
     id = Column(Integer, primary_key=True, index=True)
-    magento_order_id = Column(String(50), nullable=False, unique=True, index=True)
-    magento_order_increment_id = Column(String(50), nullable=False, index=True)
-    cj_order_id = Column(String(50), nullable=False, index=True)
-    order_status = Column(SQLEnum(OrderStatus), nullable=False, default=OrderStatus.PENDING, index=True)
-    
-    # 订单金额信息
-    total_amount = Column(Float, nullable=True)
-    currency = Column(String(3), nullable=True, default="USD")
-    
-    # 物流信息
-    tracking_number = Column(String(100), nullable=True, index=True)
-    shipping_method = Column(String(100), nullable=True)
-    
-    # 同步信息
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    last_sync_at = Column(DateTime, default=func.now(), nullable=False, index=True)
-    
-    # 额外信息
-    notes = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
-    
-    # 添加索引
-    __table_args__ = (
-        Index('idx_magento_order_id', 'magento_order_id'),
-        Index('idx_cj_order_id', 'cj_order_id'),
-        Index('idx_order_status', 'order_status'),
-        Index('idx_tracking_number', 'tracking_number'),
-        Index('idx_last_sync_at', 'last_sync_at'),
-        Index('idx_created_at', 'created_at'),
-    )
+    magento_order_id = Column(String(255), nullable=True, index=True)
+    cj_order_id = Column(String(255), nullable=True, index=True)
+    order_number = Column(String(255), unique=True, nullable=False, index=True)
+    customer_email = Column(String(255), nullable=True, index=True)
+    customer_name = Column(String(255), nullable=True)
+    order_status = Column(String(50), nullable=True)
+    payment_status = Column(String(50), nullable=True)
+    shipping_status = Column(String(50), nullable=True)
+    total_amount = Column(Numeric(10, 2), nullable=True)
+    currency = Column(String(10), nullable=True)
+    shipping_address = Column(JSON, nullable=True)
+    billing_address = Column(JSON, nullable=True)
+    items = Column(JSON, nullable=True)
+    shipping_method = Column(String(255), nullable=True)
+    payment_method = Column(String(255), nullable=True)
+    sync_status = Column(SQLEnum(SyncStatus), default=SyncStatus.PENDING, index=True)
+    last_sync_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
     def __repr__(self):
-        return f"<OrderMapping(magento_order='{self.magento_order_increment_id}', cj_order='{self.cj_order_id}', status='{self.order_status}')>" 
+        return f"<Order(order_number='{self.order_number}', customer_email='{self.customer_email}')>" 

@@ -1,100 +1,83 @@
 version: '3.8'
 
 services:
-  # 中台服务
-  middleware:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - .env
-    depends_on:
-      - mysql
-      - redis
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
-    networks:
-      - magento-cj-network
-
-  # MySQL数据库
+  # MySQL数据库服务
   mysql:
     image: mysql:8.0
+    container_name: magento_cj_mysql
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: magento_cj_middleware
+      MYSQL_USER: magento_user
+      MYSQL_PASSWORD: magento123456
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    restart: unless-stopped
     networks:
-      - magento-cj-network
+      - magento_cj_network
 
-  # Redis缓存
+  # Redis缓存服务
   redis:
     image: redis:7-alpine
+    container_name: magento_cj_redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: unless-stopped
     networks:
-      - magento-cj-network
+      - magento_cj_network
 
-  # Celery Worker
-  celery-worker:
+  # 主应用服务
+  app:
     build: .
-    command: celery -A app.services.celery_app worker --loglevel=info
-    env_file:
-      - .env
-    depends_on:
-      - redis
-      - mysql
-    volumes:
-      - ./logs:/app/logs
+    container_name: magento_cj_app
     restart: unless-stopped
-    networks:
-      - magento-cj-network
-
-  # Celery Beat (定时任务)
-  celery-beat:
-    build: .
-    command: celery -A app.services.celery_app beat --loglevel=info
-    env_file:
-      - .env
-    depends_on:
-      - redis
-      - mysql
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
-    networks:
-      - magento-cj-network
-
-  # Flower (Celery监控)
-  flower:
-    build: .
-    command: celery -A app.services.celery_app flower
     ports:
-      - "5555:5555"
-    env_file:
-      - .env
+      - "3000:3000"
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=magento_cj_middleware
+      - DB_USER=magento_user
+      - DB_PASSWORD=magento123456
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - QUEUE_REDIS_HOST=redis
+      - QUEUE_REDIS_PORT=6379
+      - QUEUE_REDIS_DB=1
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DEBUG=true
+      - HOST=0.0.0.0
+      - PORT=3000
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
     depends_on:
+      - mysql
       - redis
-    restart: unless-stopped
     networks:
-      - magento-cj-network
+      - magento_cj_network
+    command: >
+      sh -c "
+        echo 'Waiting for MySQL to be ready...' &&
+        while ! nc -z mysql 3306; do sleep 1; done &&
+        echo 'Waiting for Redis to be ready...' &&
+        while ! nc -z redis 6379; do sleep 1; done &&
+        echo 'Starting application...' &&
+        python run.py
+      "
 
 volumes:
   mysql_data:
   redis_data:
 
 networks:
-  magento-cj-network:
-    driver: bridge
+  magento_cj_network:
+    driver: bridge 

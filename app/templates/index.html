@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magento-CJ 产品同步工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .form-group input[type="url"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-group input[type="url"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: none;
+        }
+
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .result-value {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .url-example {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .url-example strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Magento-CJ 产品同步</h1>
+            <p>输入CJ Dropshipping商品链接，自动同步到Magento</p>
+        </div>
+
+        <form id="syncForm">
+            <div class="form-group">
+                <label for="cjUrl">CJ商品链接</label>
+                <input type="url" id="cjUrl" name="cjUrl" placeholder="https://www.cjdropshipping.com/product/..." required>
+                <div class="url-example">
+                    <strong>示例：</strong> https://www.cjdropshipping.com/product/...-p-1744230344494157824.html
+                </div>
+            </div>
+
+            <button type="submit" class="btn" id="syncBtn">
+                开始同步
+            </button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在同步产品，请稍候...</p>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="result" id="result">
+            <h3>同步结果</h3>
+            <div class="result-item">
+                <span class="result-label">产品名称：</span>
+                <span class="result-value" id="productName">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Magento ID：</span>
+                <span class="result-value" id="magentoId">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">SKU：</span>
+                <span class="result-value" id="sku">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Magento链接：</span>
+                <span class="result-value">
+                    <a href="#" id="magentoUrl" target="_blank">查看产品</a>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('syncForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const url = document.getElementById('cjUrl').value;
+            const syncBtn = document.getElementById('syncBtn');
+            const loading = document.getElementById('loading');
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            
+            // 重置状态
+            status.style.display = 'none';
+            result.style.display = 'none';
+            syncBtn.disabled = true;
+            loading.style.display = 'block';
+            
+            try {
+                // 验证URL格式
+                if (!url.includes('cjdropshipping.com') || !url.includes('/product/')) {
+                    throw new Error('请输入有效的CJ Dropshipping商品链接');
+                }
+                
+                // 发送同步请求
+                const response = await fetch('/api/v1/products/sync/single', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        product_url: url
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 显示成功结果
+                    document.getElementById('productName').textContent = data.product_name || '-';
+                    document.getElementById('magentoId').textContent = data.magento_product_id || '-';
+                    document.getElementById('sku').textContent = data.sku || '-';
+                    
+                    const magentoUrl = document.getElementById('magentoUrl');
+                    if (data.magento_url) {
+                        magentoUrl.href = data.magento_url;
+                        magentoUrl.style.display = 'inline';
+                    } else {
+                        magentoUrl.style.display = 'none';
+                    }
+                    
+                    result.style.display = 'block';
+                    showStatus('产品同步成功！', 'success');
+                } else {
+                    // 显示错误信息
+                    showStatus(`同步失败：${data.error}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('同步错误:', error);
+                showStatus(`同步失败：${error.message}`, 'error');
+            } finally {
+                syncBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        // URL输入时实时验证
+        document.getElementById('cjUrl').addEventListener('input', function(e) {
+            const url = e.target.value;
+            const syncBtn = document.getElementById('syncBtn');
+            
+            if (url && url.includes('cjdropshipping.com') && url.includes('/product/')) {
+                syncBtn.disabled = false;
+            } else {
+                syncBtn.disabled = true;
+            }
+        });
+    </script>
+</body>
+</html> 

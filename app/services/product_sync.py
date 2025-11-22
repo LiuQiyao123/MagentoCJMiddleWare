@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.cj_client import get_cj_client, CJClient
 from app.clients.magento_client import get_magento_client, MagentoClient
 from app.config.database import get_db
-from app.models.product import ProductMapping, SyncStatus
+from app.models.product import ProductMapping, SyncStatus as ProductSyncStatus
 from app.models.sync_log import SyncLog, SyncType, SyncStatus as LogSyncStatus
 from app.core.exceptions import APIException
 
@@ -163,7 +163,7 @@ class ProductSyncService:
                         update(ProductMapping)
                         .where(ProductMapping.id == existing_mapping.id)
                         .values(
-                            sync_status=SyncStatus.SYNCED,
+                            sync_status=ProductSyncStatus.SYNCED,
                             last_sync_at=datetime.utcnow()
                         )
                     )
@@ -178,7 +178,7 @@ class ProductSyncService:
                         magento_sku=magento_product["sku"],
                         cj_product_id=product_id,
                         cj_variant_id=variant_data[0]["vid"] if variant_data else None,
-                        sync_status=SyncStatus.SYNCED,
+                        sync_status=ProductSyncStatus.SYNCED,
                         last_sync_at=datetime.utcnow()
                     )
                     
@@ -281,7 +281,7 @@ class ProductSyncService:
             if not product_mappings:
                 async for session in get_db():
                     stmt = select(ProductMapping).where(
-                        ProductMapping.sync_status == SyncStatus.SYNCED
+                        ProductMapping.sync_status == ProductSyncStatus.SYNCED
                     )
                     result = await session.execute(stmt)
                     product_mappings = result.scalars().all()
@@ -353,7 +353,10 @@ class ProductSyncService:
             同步结果字典
         """
         import time
+        from app.config.settings import get_settings
+        
         start_time = time.time()
+        settings = get_settings()
         
         try:
             logger.info("开始同步单个商品", product_id=product_id)
@@ -364,7 +367,7 @@ class ProductSyncService:
                 raise ValueError(f"商品不存在: {product_id}")
             
             # 2. 转换为Magento格式
-            magento_product_data = self._build_magento_product(cj_product)
+            magento_product_data = self._build_magento_product(cj_product, [])
             
             # 3. 创建Magento产品
             magento_result = await self.magento_client.create_product(magento_product_data)
@@ -391,7 +394,7 @@ class ProductSyncService:
                 "product_name": cj_product.get("name"),
                 "magento_id": magento_result.get("id"),
                 "sku": magento_product_data.get("sku"),
-                "magento_url": f"{self.settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
+                "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
             }
             
         except Exception as e:
@@ -434,7 +437,7 @@ class ProductSyncService:
             from app.config.database import get_db
             
             # 获取数据库会话
-            async with get_db() as db:
+            async for session in get_db():
                 # 创建日志记录
                 sync_log = SyncLog(
                     product_id=product_id,
@@ -457,8 +460,8 @@ class ProductSyncService:
                         sync_log.error_code = "5001"
                 
                 # 保存到数据库
-                db.add(sync_log)
-                await db.commit()
+                session.add(sync_log)
+                await session.commit()
                 
                 logger.info("同步日志已记录", 
                            log_id=sync_log.id,

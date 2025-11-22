@@ -9,14 +9,10 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from app.config.settings import get_settings
+from app.models import Base
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
-
-
-class Base(DeclarativeBase):
-    """数据库模型基类"""
-    pass
 
 
 class DatabaseManager:
@@ -33,7 +29,7 @@ class DatabaseManager:
         try:
             # 创建异步引擎
             self.async_engine = create_async_engine(
-                settings.database_url,
+                settings.DATABASE_URL,
                 poolclass=QueuePool,
                 pool_size=settings.DB_POOL_SIZE,
                 max_overflow=settings.DB_MAX_OVERFLOW,

@@ -11,7 +11,9 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -40,6 +42,9 @@ db_manager = DatabaseManager()
 redis_manager = RedisManager()
 queue_manager = QueueManager()
 scheduler_manager = SchedulerManager()
+
+# 模板和静态文件
+templates = Jinja2Templates(directory="app/templates")
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
@@ -224,9 +229,17 @@ def create_app() -> FastAPI:
             }
         )
     
+    # 挂载静态文件
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    
     # 注册路由
     app.include_router(health_router, prefix="/health", tags=["Health"])
     app.include_router(api_router, prefix="/api/v1")
+    
+    # Web界面路由
+    @app.get("/", response_class=HTMLResponse)
+    async def index(request: Request):
+        return templates.TemplateResponse("index.html", {"request": request})
     
     # Prometheus指标端点
     @app.get("/metrics")
