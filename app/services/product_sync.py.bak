@@ -140,12 +140,10 @@ class ProductSyncService:
             variants = await self.cj_client.get_product_variants(product_id)
             
             product_data = product_detail.get("data", {})
-            vdata = variants.get("data", [])
-            variant_data = vdata if isinstance(vdata, list) else vdata.get("list", [])
+            variant_data = variants.get("data", {}).get("list", [])
             
             # 构造Magento产品数据
             magento_product = self._build_magento_product(product_data, variant_data)
-            image_url = magento_product.pop("_image_url", None)
             
             # 检查产品是否已存在映射
             async for session in get_db():
@@ -156,10 +154,13 @@ class ProductSyncService:
                 existing_mapping = result.scalar_one_or_none()
                 
                 if existing_mapping:
+                    # 更新现有产品
                     await self.magento_client.update_product(
                         existing_mapping.magento_product_id,
                         magento_product
                     )
+                    
+                    # 更新映射状态
                     await session.execute(
                         update(ProductMapping)
                         .where(ProductMapping.id == existing_mapping.id)
@@ -169,13 +170,11 @@ class ProductSyncService:
                         )
                     )
                 else:
+                    # 创建新产品
                     magento_response = await self.magento_client.create_product(magento_product)
                     magento_product_id = magento_response.get("id")
                     
-                    # 上传主图
-                    if image_url:
-                        await self._upload_product_image(magento_product["sku"], image_url)
-                    
+                    # 创建产品映射
                     mapping = ProductMapping(
                         magento_product_id=str(magento_product_id),
                         magento_sku=magento_product["sku"],
@@ -184,6 +183,7 @@ class ProductSyncService:
                         sync_status=ProductSyncStatus.SYNCED,
                         last_sync_at=datetime.utcnow()
                     )
+                    
                     session.add(mapping)
                 
                 await session.commit()
@@ -208,34 +208,6 @@ class ProductSyncService:
                 await session.commit()
             raise
     
-    def _parse_range_value(self, value) -> float:
-        """解析区间值，如 '4.28-6.28' 取最小值"""
-        try:
-            return float(str(value).split("-")[0].strip())
-        except (ValueError, TypeError, AttributeError):
-            return 0.0
-
-    async def _download_and_encode_image(self, url: str) -> Optional[Dict[str, Any]]:
-        """下载图片并转为base64"""
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30, verify=False) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    import base64
-                    content = resp.content
-                    ext = url.rsplit(".", 1)[-1].split("?")[0].lower()
-                    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
-                    mime = mime_map.get(ext, "image/jpeg")
-                    return {
-                        "base64_encoded_data": base64.b64encode(content).decode(),
-                        "type": mime,
-                        "name": f"image_{url.rsplit('/', 1)[-1]}"
-                    }
-        except Exception as e:
-            logger.warning("Failed to download image", extra={"url": url, "error": str(e)})
-        return None
-
     def _build_magento_product(
         self,
         cj_product: Dict[str, Any],
@@ -243,77 +215,39 @@ class ProductSyncService:
     ) -> Dict[str, Any]:
         """构建Magento产品数据"""
         
-        name = cj_product.get("productNameEn", "") or cj_product.get("productName", "")
-        if isinstance(name, list):
-            name = " ".join(name)
-        name = name[:200]
-        
-        price = self._parse_range_value(
-            cj_product.get("suggestSellPrice", cj_product.get("sellPrice", 0))
-        )
-        cost_price = self._parse_range_value(cj_product.get("sellPrice", 0))
-        weight = self._parse_range_value(cj_product.get("productWeight", 0))
-        description = cj_product.get("description", "") or name
-        hs_code = cj_product.get("entryCode", "")
-        entry_name = cj_product.get("entryNameEn", "") or cj_product.get("entryName", "")
-        
-        custom_attributes = [
-            {"attribute_code": "description", "value": description},
-            {"attribute_code": "short_description", "value": name},
-            {"attribute_code": "meta_title", "value": name},
-        ]
-        
-        # 海关信息
-        if hs_code:
-            custom_attributes.append({"attribute_code": "hs_code", "value": hs_code})
-        if entry_name:
-            custom_attributes.append({"attribute_code": "entry_name", "value": entry_name})
-        
         # 基础产品信息
         magento_product = {
             "sku": f"CJ_{cj_product['pid']}",
-            "name": name,
-            "price": price,
-            "status": 1,
-            "visibility": 4,
+            "name": cj_product.get("productName", ""),
+            "price": float(str(cj_product.get("sellPrice", 0)).split("-")[0]),
+            "status": 1,  # 启用
+            "visibility": 4,  # 目录和搜索可见
             "type_id": "simple",
-            "attribute_set_id": 4,
-            "weight": max(weight, 0.001),
+            "attribute_set_id": 4,  # 默认属性集
+            "weight": float(str(cj_product.get("productWeight", 0)).split("-")[0]),
             "extension_attributes": {},
-            "custom_attributes": custom_attributes
+            "custom_attributes": [
+                {
+                    "attribute_code": "description",
+                    "value": cj_product.get("description", "")
+                },
+                {
+                    "attribute_code": "short_description", 
+                    "value": cj_product.get("productName", "")
+                },
+                {
+                    "attribute_code": "meta_title",
+                    "value": cj_product.get("productName", "")
+                },
+            ]
         }
         
-        # 主图URL（延后上传，先创建商品）
-        big_image = cj_product.get("bigImage") or (cj_product.get("productImage") or [None])[0] if isinstance(cj_product.get("productImage"), list) else cj_product.get("productImage")
-        if big_image:
-            magento_product["_image_url"] = big_image
-        
+        # 处理变体（如果有多个变体，创建为可配置产品）
+        if len(variants) > 1:
+            magento_product["type_id"] = "configurable"
+            # 这里需要根据实际需求处理可配置产品的变体
+            
         return magento_product
-
-    async def _upload_product_image(self, product_sku: str, image_url: str, label: str = "") -> None:
-        """上传商品图片到Magento"""
-        content = await self._download_and_encode_image(image_url)
-        if not content:
-            return
-        
-        image_data = {
-            "entry": {
-                "media_type": "image",
-                "label": label[:50] or "Product Image",
-                "position": 0,
-                "disabled": False,
-                "types": ["image", "small_image", "thumbnail"],
-                "content": content
-            }
-        }
-        
-        try:
-            await self.magento_client._make_request(
-                "POST", f"/products/{product_sku}/media", data=image_data
-            )
-            logger.info("Image uploaded", extra={"sku": product_sku, "url": image_url[:80]})
-        except Exception as e:
-            logger.warning("Image upload failed", extra={"sku": product_sku, "error": str(e)})
     
     async def sync_inventory_from_cj(self, product_mappings: Optional[List[ProductMapping]] = None) -> Dict[str, Any]:
         """从CJ同步库存到Magento"""
@@ -408,6 +342,7 @@ class ProductSyncService:
         import time
         from app.config.settings import get_settings
         
+        # 确保服务已初始化
         if not self.cj_client or not self.magento_client:
             await self.initialize()
         
@@ -426,77 +361,20 @@ class ProductSyncService:
             if not cj_product:
                 raise ValueError(f"商品数据为空: {product_id}")
             
-            # 获取变体（优先使用商品详情中带的变体，否则单独查询）
-            root_variants = cj_product.get("variants", [])
-            if not root_variants:
-                variant_response = await self.cj_client.get_product_variants(product_id)
-                if variant_response.get("result"):
-                    vdata = variant_response.get("data", [])
-                    root_variants = vdata if isinstance(vdata, list) else vdata.get("list", [])
-            
-            # 2. 构建Magento产品数据
-            magento_product_data = self._build_magento_product(cj_product, root_variants)
-            image_url = magento_product_data.pop("_image_url", None)
+            # 2. 转换为Magento格式
+            magento_product_data = self._build_magento_product(cj_product, [])
             
             # 3. 创建Magento产品
             magento_result = await self.magento_client.create_product(magento_product_data)
-            product_sku = magento_product_data["sku"]
-            magento_id = magento_result.get("id")
-            main_name = cj_product.get("productNameEn", "") or str(cj_product.get("productName", ""))
             
-            # 4. 上传主图
-            if image_url:
-                await self._upload_product_image(product_sku, image_url, main_name[:50])
+            # 4. 计算同步耗时
+            sync_duration = int((time.time() - start_time) * 1000)  # 转换为毫秒
             
-            # 5. 处理变体（创建独立子商品）
-            child_products = []
-            if root_variants and len(root_variants) > 0:
-                cj_price = self._parse_range_value(cj_product.get("suggestSellPrice", cj_product.get("sellPrice", 0)))
-                cj_weight = self._parse_range_value(cj_product.get("productWeight", 0))
-                cj_desc = cj_product.get("description", "") or main_name
-                for idx, variant in enumerate(root_variants):
-                    variant_key = variant.get("variantKey", str(idx))
-                    child_sku = f"CJ_{product_id}_{variant_key}"
-                    
-                    child_data = {
-                        "sku": child_sku,
-                        "name": f"{main_name[:150]} - {variant_key}"[:200],
-                        "price": cj_price,
-                        "status": 1,
-                        "visibility": 1,
-                        "type_id": "simple",
-                        "attribute_set_id": 4,
-                        "weight": max(cj_weight, 0.001),
-                        "extension_attributes": {},
-                        "custom_attributes": [
-                            {"attribute_code": "description", "value": cj_desc},
-                            {"attribute_code": "short_description", "value": f"{main_name[:100]} - {variant_key}"},
-                        ]
-                    }
-                    
-                    try:
-                        child_result = await self.magento_client.create_product(child_data)
-                        child_sku_created = child_result.get("sku", child_sku)
-                        
-                        # 上传变体图片
-                        variant_image = variant.get("variantImage", "")
-                        if variant_image:
-                            await self._upload_product_image(child_sku_created, variant_image, f"{main_name[:30]} - {variant_key}")
-                        
-                        child_products.append({
-                            "sku": child_sku_created,
-                            "variant_key": variant_key,
-                            "magento_id": child_result.get("id")
-                        })
-                    except Exception as ve:
-                        logger.warning("Variant creation failed", extra={"variant": variant_key, "error": str(ve)})
-            
-            sync_duration = int((time.time() - start_time) * 1000)
-            
+            # 5. 记录同步日志
             await self._log_sync_result(
                 product_id=product_id,
                 success=True,
-                magento_id=magento_id,
+                magento_id=magento_result.get("id"),
                 error_message=None,
                 product_url=product_url,
                 sync_duration=sync_duration
@@ -504,18 +382,15 @@ class ProductSyncService:
             
             logger.info("单个商品同步成功", 
                        product_id=product_id, 
-                       magento_id=magento_id,
-                       variants=len(child_products),
+                       magento_id=magento_result.get("id"),
                        duration_ms=sync_duration)
             
-            result = {
-                "product_name": main_name[:80],
-                "magento_id": magento_id,
-                "sku": product_sku,
-                "variants": child_products,
-                "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_id}"
+            return {
+                "product_name": cj_product.get("name"),
+                "magento_id": magento_result.get("id"),
+                "sku": magento_product_data.get("sku"),
+                "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_result.get('id')}"
             }
-            return result
             
         except Exception as e:
             error_message = str(e)
