@@ -107,7 +107,8 @@ class DatabaseManager:
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """获取异步数据库会话"""
         if not self.async_session_factory:
-            raise RuntimeError("Database not initialized")
+            logger.warning("Database not initialized, attempting lazy initialization...")
+            await self.initialize()
         
         async with self.async_session_factory() as session:
             try:

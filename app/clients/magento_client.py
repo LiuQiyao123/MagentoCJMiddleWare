@@ -78,11 +78,16 @@ class MagentoClient:
             )
             
             # 测试连接
-            await self._test_connection()
+            try:
+                await self._test_connection()
+                logger.info("Magento API connection test passed")
+            except Exception as e:
+                logger.warning("Magento API connection test failed (non-blocking)", extra={"error": str(e)})
             
             logger.info("Magento API client initialized successfully")
             
         except Exception as e:
+            # 初始化本身的错误（如httpx客户端创建失败）仍然抛出
             logger.error("Failed to initialize Magento API client", extra={"error": str(e)})
             raise MagentoAPIError(
                 error_code="MAGENTO_INIT_ERROR",
@@ -99,8 +104,9 @@ class MagentoClient:
     async def _test_connection(self) -> None:
         """测试连接"""
         try:
+            # 使用不需要特殊权限的端点进行测试
             response = await self._client.get(
-                f"{self.base_url}/rest/V1/store/storeConfigs",
+                f"{self.base_url}/rest/V1/directory/currency",
                 headers=self._get_headers()
             )
             
@@ -150,6 +156,11 @@ class MagentoClient:
             )
             
             if response.status_code not in [200, 201]:
+                logger.error("Magento API error", extra={
+                    "status": response.status_code,
+                    "response": response.text[:1000],
+                    "endpoint": endpoint
+                })
                 raise MagentoAPIError(
                     error_code="MAGENTO_REQUEST_ERROR",
                     message=f"Magento API request failed with status {response.status_code}",

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,6 +29,7 @@
             padding: 40px;
             max-width: 600px;
             width: 100%;
+            position: relative;
         }
 
         .header {
@@ -103,6 +105,16 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            box-shadow: 0 10px 20px rgba(108, 117, 125, 0.3);
         }
 
         .status {
@@ -183,8 +195,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .url-example {
@@ -199,8 +216,128 @@
         .url-example strong {
             color: #667eea;
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 900px;
+            border-radius: 15px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .log-table-container {
+            overflow-y: auto;
+            flex-grow: 1;
+            margin-top: 15px;
+            max-height: 500px;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .log-table th,
+        .log-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .log-table th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            color: #333;
+        }
+
+        .log-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .log-table tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-processing {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .log-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .log-controls .btn {
+            width: auto;
+            padding: 8px 15px;
+            font-size: 0.9em;
+            margin-bottom: 0;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -211,7 +348,8 @@
         <form id="syncForm">
             <div class="form-group">
                 <label for="cjUrl">CJ商品链接</label>
-                <input type="url" id="cjUrl" name="cjUrl" placeholder="https://www.cjdropshipping.com/product/..." required>
+                <input type="url" id="cjUrl" name="cjUrl" placeholder="https://www.cjdropshipping.com/product/..."
+                    required>
                 <div class="url-example">
                     <strong>示例：</strong> https://www.cjdropshipping.com/product/...-p-1744230344494157824.html
                 </div>
@@ -219,6 +357,10 @@
 
             <button type="submit" class="btn" id="syncBtn">
                 开始同步
+            </button>
+
+            <button type="button" class="btn btn-secondary" id="viewLogsBtn">
+                查看同步历史
             </button>
         </form>
 
@@ -252,28 +394,121 @@
         </div>
     </div>
 
+    <!-- Log Modal -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>最近10次同步记录</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="log-controls">
+                <button class="btn" id="refreshLogs">刷新</button>
+            </div>
+            <div class="log-table-container">
+                <table class="log-table" id="logTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 160px;">时间</th>
+                            <th style="width: 100px;">类型</th>
+                            <th style="width: 80px;">状态</th>
+                            <th>详情</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <!-- Logs will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
-        document.getElementById('syncForm').addEventListener('submit', async function(e) {
+        // 日志相关逻辑
+        const modal = document.getElementById("logModal");
+        const btn = document.getElementById("viewLogsBtn");
+        const span = document.getElementsByClassName("close")[0];
+        const logTableBody = document.getElementById("logTableBody");
+        const refreshBtn = document.getElementById("refreshLogs");
+
+        btn.onclick = function () {
+            modal.style.display = "block";
+            fetchSyncHistory();
+        }
+
+        span.onclick = function () {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        refreshBtn.onclick = fetchSyncHistory;
+
+        async function fetchSyncHistory() {
+            logTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">加载中...</td></tr>';
+            try {
+                const response = await fetch('/api/v1/logs/sync-history?limit=10');
+                if (!response.ok) throw new Error("Failed to fetch history");
+                const logs = await response.json();
+
+                logTableBody.innerHTML = '';
+                if (logs.length === 0) {
+                    logTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">暂无同步记录</td></tr>';
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const row = document.createElement('tr');
+
+                    // Status Badge
+                    let statusClass = 'status-processing';
+                    if (log.status === 'success') statusClass = 'status-success';
+                    else if (log.status === 'failed') statusClass = 'status-failed';
+
+                    // Message formatting
+                    let message = log.message || '-';
+                    if (log.error_details) {
+                        message += `<br><small style="color:red;">${JSON.stringify(log.error_details).substring(0, 100)}...</small>`;
+                    }
+
+                    row.innerHTML = `
+                        <td>${log.created_at || '-'}</td>
+                        <td>${log.sync_type || '-'}</td>
+                        <td><span class="status-badge ${statusClass}">${log.status}</span></td>
+                        <td>${message}</td>
+                    `;
+                    logTableBody.appendChild(row);
+                });
+            } catch (error) {
+                logTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">加载失败: ${error.message}</td></tr>`;
+            }
+        }
+
+        // 同步相关逻辑
+        document.getElementById('syncForm').addEventListener('submit', async function (e) {
             e.preventDefault();
-            
+
             const url = document.getElementById('cjUrl').value;
             const syncBtn = document.getElementById('syncBtn');
             const loading = document.getElementById('loading');
             const status = document.getElementById('status');
             const result = document.getElementById('result');
-            
+
             // 重置状态
             status.style.display = 'none';
             result.style.display = 'none';
             syncBtn.disabled = true;
             loading.style.display = 'block';
-            
+
             try {
                 // 验证URL格式
                 if (!url.includes('cjdropshipping.com') || !url.includes('/product/')) {
                     throw new Error('请输入有效的CJ Dropshipping商品链接');
                 }
-                
+
                 // 发送同步请求
                 const response = await fetch('/api/v1/products/sync/single', {
                     method: 'POST',
@@ -284,15 +519,15 @@
                         product_url: url
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // 显示成功结果
                     document.getElementById('productName').textContent = data.product_name || '-';
                     document.getElementById('magentoId').textContent = data.magento_product_id || '-';
                     document.getElementById('sku').textContent = data.sku || '-';
-                    
+
                     const magentoUrl = document.getElementById('magentoUrl');
                     if (data.magento_url) {
                         magentoUrl.href = data.magento_url;
@@ -300,14 +535,14 @@
                     } else {
                         magentoUrl.style.display = 'none';
                     }
-                    
+
                     result.style.display = 'block';
                     showStatus('产品同步成功！', 'success');
                 } else {
                     // 显示错误信息
-                    showStatus(`同步失败：${data.error}`, 'error');
+                    showStatus(`同步失败：${data.error || data.message || data.error_message || '未知错误'}`, 'error');
                 }
-                
+
             } catch (error) {
                 console.error('同步错误:', error);
                 showStatus(`同步失败：${error.message}`, 'error');
@@ -316,19 +551,19 @@
                 loading.style.display = 'none';
             }
         });
-        
+
         function showStatus(message, type) {
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = `status ${type}`;
             status.style.display = 'block';
         }
-        
+
         // URL输入时实时验证
-        document.getElementById('cjUrl').addEventListener('input', function(e) {
+        document.getElementById('cjUrl').addEventListener('input', function (e) {
             const url = e.target.value;
             const syncBtn = document.getElementById('syncBtn');
-            
+
             if (url && url.includes('cjdropshipping.com') && url.includes('/product/')) {
                 syncBtn.disabled = false;
             } else {
@@ -337,4 +572,5 @@
         });
     </script>
 </body>
-</html> 
+
+</html>

@@ -219,12 +219,12 @@ class ProductSyncService:
         magento_product = {
             "sku": f"CJ_{cj_product['pid']}",
             "name": cj_product.get("productName", ""),
-            "price": cj_product.get("sellPrice", 0),
+            "price": float(str(cj_product.get("sellPrice", 0)).split("-")[0]),
             "status": 1,  # 启用
             "visibility": 4,  # 目录和搜索可见
             "type_id": "simple",
             "attribute_set_id": 4,  # 默认属性集
-            "weight": cj_product.get("productWeight", 0),
+            "weight": float(str(cj_product.get("productWeight", 0)).split("-")[0]),
             "extension_attributes": {},
             "custom_attributes": [
                 {
@@ -239,25 +239,8 @@ class ProductSyncService:
                     "attribute_code": "meta_title",
                     "value": cj_product.get("productName", "")
                 },
-                {
-                    "attribute_code": "cj_product_id",
-                    "value": cj_product["pid"]
-                }
             ]
         }
-        
-        # 添加产品图片
-        if cj_product.get("productImage"):
-            magento_product["media_gallery_entries"] = [
-                {
-                    "media_type": "image",
-                    "label": "Product Image",
-                    "position": 1,
-                    "disabled": False,
-                    "types": ["image", "small_image", "thumbnail"],
-                    "file": cj_product["productImage"]
-                }
-            ]
         
         # 处理变体（如果有多个变体，创建为可配置产品）
         if len(variants) > 1:
