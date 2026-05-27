@@ -1,576 +1,408 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Magento-CJ 产品同步工具</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            min-height: 100vh; padding: 20px;
         }
-
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-            position: relative;
+            background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px; max-width: 800px; width: 100%; margin: 0 auto;
         }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
+        .header { text-align: center; margin-bottom: 30px; }
         .header h1 {
-            color: #333;
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            color: #333; font-size: 2.5em; margin-bottom: 10px;
             background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-            font-size: 1.1em;
-        }
-
+        .header p { color: #666; font-size: 1.1em; }
+        .form-group { margin-bottom: 25px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; }
         .form-group input[type="url"] {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            background: #f8f9fa;
+            width: 100%; padding: 15px; border: 2px solid #e1e5e9; border-radius: 10px;
+            font-size: 1em; transition: all 0.3s ease; background: #f8f9fa;
         }
-
         .form-group input[type="url"]:focus {
-            outline: none;
-            border-color: #667eea;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            outline: none; border-color: #667eea; background: white; box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
         }
-
         .btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+            border: none; padding: 15px 30px; border-radius: 10px; font-size: 1.1em;
+            font-weight: 600; cursor: pointer; transition: all 0.3s ease; width: 100%; margin-bottom: 20px;
         }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102,126,234,0.3); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary { background: #6c757d; margin-top: 10px; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn-sm { padding: 8px 16px; font-size: 0.85em; width: auto; }
 
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            margin-top: 10px;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-            box-shadow: 0 10px 20px rgba(108, 117, 125, 0.3);
-        }
-
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 10px;
-            display: none;
-        }
-
-        .status.success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-
-        .status.info {
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
-        }
-
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
-            display: none;
-        }
-
-        .result h3 {
-            color: #333;
+        /* Task progress */
+        .task-panel { display: none; margin-top: 20px; }
+        .progress-bar {
+            width: 100%; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden;
             margin-bottom: 15px;
         }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s ease; border-radius: 12px; text-align: center;
+            line-height: 24px; color: white; font-size: 0.8em; font-weight: 600;
+        }
+        .task-message { padding: 10px 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 10px; }
+        .task-status { font-weight: 600; margin-bottom: 5px; }
+        .task-status.running { color: #856404; }
+        .task-status.success { color: #155724; }
+        .task-status.failed { color: #721c24; }
 
+        /* Logs */
+        .task-logs {
+            max-height: 200px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4;
+            padding: 12px; border-radius: 8px; font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.85em; line-height: 1.5; margin-bottom: 10px;
+        }
+        .task-logs .log-entry { margin: 2px 0; }
+        .task-logs .log-error { color: #f44747; }
+        .task-logs .log-warn { color: #cca700; }
+
+        /* Errors */
+        .task-errors { margin-bottom: 10px; }
+        .task-errors .error-item {
+            padding: 8px 12px; background: #fff5f5; border-left: 3px solid #e53e3e;
+            margin-bottom: 4px; border-radius: 4px; font-size: 0.9em; color: #c53030;
+        }
+
+        /* Result */
+        .result {
+            margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px;
+            border-left: 4px solid #667eea; display: none;
+        }
+        .result h3 { color: #333; margin-bottom: 15px; }
         .result-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid #e9ecef;
+            display: flex; justify-content: space-between; margin-bottom: 10px;
+            padding: 8px 0; border-bottom: 1px solid #e9ecef;
         }
+        .result-item:last-child { border-bottom: none; }
+        .result-label { font-weight: 600; color: #495057; }
+        .result-value { color: #667eea; font-weight: 500; }
 
-        .result-item:last-child {
-            border-bottom: none;
-        }
-
-        .result-label {
-            font-weight: 600;
-            color: #495057;
-        }
-
-        .result-value {
-            color: #667eea;
-            font-weight: 500;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .url-example {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            font-size: 0.9em;
-            color: #666;
-        }
-
-        .url-example strong {
-            color: #667eea;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
+        /* Task list modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
         .modal-content {
-            background-color: #fefefe;
-            margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 90%;
-            max-width: 900px;
-            border-radius: 15px;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
+            background: #fefefe; margin: 5% auto; padding: 20px; border-radius: 15px;
+            width: 90%; max-width: 900px; max-height: 80vh; display: flex; flex-direction: column;
         }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+        .task-list { overflow-y: auto; flex-grow: 1; margin-top: 15px; max-height: 500px; }
+        .task-card {
+            padding: 12px; border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 8px;
+            cursor: pointer; transition: all 0.2s;
         }
+        .task-card:hover { background: #f8f9fa; }
+        .task-card .task-meta { display: flex; justify-content: space-between; font-size: 0.85em; color: #666; }
+        .task-card .task-progress-small { height: 6px; background: #e9ecef; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+        .task-card .task-progress-small .fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .task-card .task-progress-small .fill.success { background: #48bb78; }
+        .task-card .task-progress-small .fill.failed { background: #f56565; }
+        .task-card .task-progress-small .fill.running { background: linear-gradient(90deg, #667eea, #764ba2); }
 
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        .log-table-container {
-            overflow-y: auto;
-            flex-grow: 1;
-            margin-top: 15px;
-            max-height: 500px;
-        }
-
-        .log-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9em;
-        }
-
-        .log-table th,
-        .log-table td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }
-
-        .log-table th {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-            color: #333;
-        }
-
-        .log-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        .log-table tr:hover {
-            background-color: #f1f1f1;
-        }
-
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
-
-        .status-success {
-            background-color: #d4edda;
-            color: #155724;
-        }
-
-        .status-failed {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
-        .status-processing {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-
-        .log-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .log-controls .btn {
-            width: auto;
-            padding: 8px 15px;
-            font-size: 0.9em;
-            margin-bottom: 0;
-        }
+        .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+        .status-running { background: #fff3cd; color: #856404; }
+        .status-pending { background: #e2e8f0; color: #4a5568; }
     </style>
 </head>
-
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Magento-CJ 产品同步</h1>
-            <p>输入CJ Dropshipping商品链接，自动同步到Magento</p>
-        </div>
-
-        <form id="syncForm">
-            <div class="form-group">
-                <label for="cjUrl">CJ商品链接</label>
-                <input type="url" id="cjUrl" name="cjUrl" placeholder="https://www.cjdropshipping.com/product/..."
-                    required>
-                <div class="url-example">
-                    <strong>示例：</strong> https://www.cjdropshipping.com/product/...-p-1744230344494157824.html
-                </div>
-            </div>
-
-            <button type="submit" class="btn" id="syncBtn">
-                开始同步
-            </button>
-
-            <button type="button" class="btn btn-secondary" id="viewLogsBtn">
-                查看同步历史
-            </button>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>正在同步产品，请稍候...</p>
-        </div>
-
-        <div class="status" id="status"></div>
-
-        <div class="result" id="result">
-            <h3>同步结果</h3>
-            <div class="result-item">
-                <span class="result-label">产品名称：</span>
-                <span class="result-value" id="productName">-</span>
-            </div>
-            <div class="result-item">
-                <span class="result-label">Magento ID：</span>
-                <span class="result-value" id="magentoId">-</span>
-            </div>
-            <div class="result-item">
-                <span class="result-label">SKU：</span>
-                <span class="result-value" id="sku">-</span>
-            </div>
-            <div class="result-item">
-                <span class="result-label">Magento链接：</span>
-                <span class="result-value">
-                    <a href="#" id="magentoUrl" target="_blank">查看产品</a>
-                </span>
-            </div>
-        </div>
+<div class="container">
+    <div class="header">
+        <h1>Magento-CJ 产品同步</h1>
+        <p>输入CJ Dropshipping商品链接，自动同步到Magento</p>
     </div>
 
-    <!-- Log Modal -->
-    <div id="logModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>最近10次同步记录</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="log-controls">
-                <button class="btn" id="refreshLogs">刷新</button>
-            </div>
-            <div class="log-table-container">
-                <table class="log-table" id="logTable">
-                    <thead>
-                        <tr>
-                            <th style="width: 160px;">时间</th>
-                            <th style="width: 100px;">类型</th>
-                            <th style="width: 80px;">状态</th>
-                            <th>详情</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logTableBody">
-                        <!-- Logs will be inserted here -->
-                    </tbody>
-                </table>
+    <form id="syncForm">
+        <div class="form-group">
+            <label for="cjUrl">CJ商品链接</label>
+            <input type="url" id="cjUrl" placeholder="https://www.cjdropshipping.com/product/..." required>
+            <div style="margin-top:8px;font-size:0.9em;color:#666;">
+                <strong>示例：</strong> https://www.cjdropshipping.com/product/...-p-xxxxx.html
             </div>
         </div>
+        <button type="submit" class="btn" id="syncBtn">开始同步</button>
+        <button type="button" class="btn btn-secondary" id="viewTasksBtn">📋 查看同步任务</button>
+    </form>
+
+    <!-- 异步任务面板 -->
+    <div class="task-panel" id="taskPanel">
+        <div class="task-status" id="taskStatusLabel">⏳ 任务运行中...</div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width:0%">0%</div>
+        </div>
+        <div class="task-message" id="taskMessage">初始化...</div>
+
+        <div class="task-errors" id="taskErrors" style="display:none;">
+            <strong>⚠️ 错误日志：</strong>
+            <div id="errorList"></div>
+        </div>
+
+        <strong style="font-size:0.9em;">📝 运行日志：</strong>
+        <div class="task-logs" id="taskLogs"></div>
     </div>
 
-    <script>
-        // 日志相关逻辑
-        const modal = document.getElementById("logModal");
-        const btn = document.getElementById("viewLogsBtn");
-        const span = document.getElementsByClassName("close")[0];
-        const logTableBody = document.getElementById("logTableBody");
-        const refreshBtn = document.getElementById("refreshLogs");
+    <!-- 结果面板 -->
+    <div class="result" id="result">
+        <h3>✅ 同步完成</h3>
+        <div class="result-item"><span class="result-label">产品名称：</span><span class="result-value" id="productName">-</span></div>
+        <div class="result-item"><span class="result-label">Magento ID：</span><span class="result-value" id="magentoId">-</span></div>
+        <div class="result-item"><span class="result-label">SKU：</span><span class="result-value" id="sku">-</span></div>
+        <div class="result-item"><span class="result-label">变体数：</span><span class="result-value" id="variantCount">-</span></div>
+        <div class="result-item"><span class="result-label">Magento链接：</span><span class="result-value"><a href="#" id="magentoUrl" target="_blank">查看产品</a></span></div>
+    </div>
+</div>
 
-        btn.onclick = function () {
-            modal.style.display = "block";
-            fetchSyncHistory();
+<!-- 任务列表 Modal -->
+<div id="taskModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>同步任务记录</h2>
+            <span class="close">&times;</span>
+        </div>
+        <div style="margin:10px 0;"><button class="btn btn-sm btn-secondary" id="refreshTasks">🔄 刷新</button></div>
+        <div class="task-list" id="taskList"></div>
+    </div>
+</div>
+
+<script>
+const taskPanel = document.getElementById('taskPanel');
+const progressFill = document.getElementById('progressFill');
+const taskMessage = document.getElementById('taskMessage');
+const taskLogs = document.getElementById('taskLogs');
+const taskErrors = document.getElementById('taskErrors');
+const errorList = document.getElementById('errorList');
+const taskStatusLabel = document.getElementById('taskStatusLabel');
+const resultPanel = document.getElementById('result');
+
+let pollTimer = null;
+
+// 提交同步
+document.getElementById('syncForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const url = document.getElementById('cjUrl').value;
+    const syncBtn = document.getElementById('syncBtn');
+
+    if (!url.includes('cjdropshipping.com') || !url.includes('/product/')) {
+        alert('请输入有效的CJ Dropshipping商品链接');
+        return;
+    }
+
+    syncBtn.disabled = true;
+    syncBtn.textContent = '⏳ 同步中...';
+    resultPanel.style.display = 'none';
+    taskPanel.style.display = 'block';
+    taskLogs.innerHTML = '';
+    errorList.innerHTML = '';
+    taskErrors.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressFill.textContent = '0%';
+    taskMessage.textContent = '正在启动同步任务...';
+    taskStatusLabel.textContent = '⏳ 任务已创建，等待开始...';
+    taskStatusLabel.className = 'task-status running';
+
+    try {
+        const resp = await fetch('/api/v1/products/sync/single', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_url: url })
+        });
+        const data = await resp.json();
+
+        if (!data.success || !data.task_id) {
+            throw new Error(data.error || '启动同步失败');
         }
 
-        span.onclick = function () {
-            modal.style.display = "none";
-        }
+        addLog('✅ 任务已创建', 'success', data.task_id);
+        // 开始轮询状态
+        startPolling(data.task_id);
 
-        window.onclick = function (event) {
-            if (event.target == modal) {
-                modal.style.display = "none";
-            }
-        }
+    } catch(err) {
+        addLog('❌ ' + err.message, 'error');
+        taskStatusLabel.textContent = '❌ 启动失败';
+        taskStatusLabel.className = 'task-status failed';
+        syncBtn.disabled = false;
+        syncBtn.textContent = '开始同步';
+    }
+});
 
-        refreshBtn.onclick = fetchSyncHistory;
+// 轮询任务状态
+function startPolling(taskId) {
+    if (pollTimer) clearInterval(pollTimer);
 
-        async function fetchSyncHistory() {
-            logTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">加载中...</td></tr>';
-            try {
-                const response = await fetch('/api/v1/logs/sync-history?limit=10');
-                if (!response.ok) throw new Error("Failed to fetch history");
-                const logs = await response.json();
-
-                logTableBody.innerHTML = '';
-                if (logs.length === 0) {
-                    logTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">暂无同步记录</td></tr>';
+    pollTimer = setInterval(async () => {
+        try {
+            const resp = await fetch(`/api/v1/products/sync/status/${taskId}`);
+            if (!resp.ok) {
+                if (resp.status === 404) {
+                    addLog('⚠️ 任务已过期或不存在', 'warn');
+                    stopPolling();
                     return;
                 }
-
-                logs.forEach(log => {
-                    const row = document.createElement('tr');
-
-                    // Status Badge
-                    let statusClass = 'status-processing';
-                    if (log.status === 'success') statusClass = 'status-success';
-                    else if (log.status === 'failed') statusClass = 'status-failed';
-
-                    // Message formatting
-                    let message = log.message || '-';
-                    if (log.error_details) {
-                        message += `<br><small style="color:red;">${JSON.stringify(log.error_details).substring(0, 100)}...</small>`;
-                    }
-
-                    row.innerHTML = `
-                        <td>${log.created_at || '-'}</td>
-                        <td>${log.sync_type || '-'}</td>
-                        <td><span class="status-badge ${statusClass}">${log.status}</span></td>
-                        <td>${message}</td>
-                    `;
-                    logTableBody.appendChild(row);
-                });
-            } catch (error) {
-                logTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">加载失败: ${error.message}</td></tr>`;
+                throw new Error('状态查询失败');
             }
+            const task = await resp.json();
+            updateTaskUI(task);
+
+            if (task.status === 'success' || task.status === 'failed' || task.status === 'cancelled') {
+                stopPolling();
+                if (task.status === 'success') {
+                    showResult(task.result);
+                }
+                document.getElementById('syncBtn').disabled = false;
+                document.getElementById('syncBtn').textContent = '开始同步';
+            }
+        } catch(err) {
+            addLog('⚠️ 轮询错误: ' + err.message, 'warn');
+        }
+    }, 1500);
+}
+
+function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// 更新UI
+function updateTaskUI(task) {
+    // 进度条
+    const pct = Math.min(task.progress || 0, 100);
+    progressFill.style.width = pct + '%';
+    progressFill.textContent = pct + '%';
+
+    // 消息
+    taskMessage.textContent = task.message || '';
+
+    // 状态标签
+    const statusMap = {
+        'running': { text: '⏳ 运行中...', cls: 'running' },
+        'success': { text: '✅ 完成', cls: 'success' },
+        'failed': { text: '❌ 失败', cls: 'failed' },
+        'pending': { text: '⏸ 等待中', cls: 'pending' }
+    };
+    const s = statusMap[task.status] || { text: task.status, cls: '' };
+    taskStatusLabel.textContent = s.text;
+    taskStatusLabel.className = 'task-status ' + s.cls;
+
+    // 错误
+    if (task.errors && task.errors.length > 0) {
+        taskErrors.style.display = 'block';
+        errorList.innerHTML = task.errors.map(e =>
+            `<div class="error-item">${e.time ? new Date(e.time).toLocaleTimeString() : ''} - ${e.error}</div>`
+        ).join('');
+    }
+
+    // 日志
+    if (task.logs && task.logs.length > 0) {
+        const existingCount = taskLogs.children.length;
+        const newLogs = task.logs.slice(existingCount);
+        newLogs.forEach(l => {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.textContent = `${l.time ? new Date(l.time).toLocaleTimeString() : ''} ${l.log}`;
+            taskLogs.appendChild(div);
+        });
+        taskLogs.scrollTop = taskLogs.scrollHeight;
+    }
+}
+
+function addLog(text, type, extra) {
+    const div = document.createElement('div');
+    div.className = 'log-entry' + (type === 'error' ? ' log-error' : type === 'warn' ? ' log-warn' : '');
+    div.textContent = `${new Date().toLocaleTimeString()} ${text}${extra ? ' (' + extra + ')' : ''}`;
+    taskLogs.appendChild(div);
+    taskLogs.scrollTop = taskLogs.scrollHeight;
+}
+
+function showResult(result) {
+    if (!result) return;
+    resultPanel.style.display = 'block';
+    document.getElementById('productName').textContent = result.product_name || '-';
+    document.getElementById('magentoId').textContent = result.magento_id || '-';
+    document.getElementById('sku').textContent = result.sku || '-';
+    document.getElementById('variantCount').textContent = (result.variants || 0) + ' 个';
+
+    const urlLink = document.getElementById('magentoUrl');
+    if (result.magento_url) {
+        urlLink.href = result.magento_url;
+        urlLink.style.display = 'inline';
+    } else {
+        urlLink.style.display = 'none';
+    }
+}
+
+// 任务列表 Modal
+const modal = document.getElementById('taskModal');
+document.getElementById('viewTasksBtn').onclick = function() {
+    modal.style.display = 'block';
+    loadTaskList();
+};
+document.querySelector('.close').onclick = function() { modal.style.display = 'none'; };
+window.onclick = function(e) { if (e.target == modal) modal.style.display = 'none'; };
+document.getElementById('refreshTasks').onclick = loadTaskList;
+
+async function loadTaskList() {
+    const list = document.getElementById('taskList');
+    list.innerHTML = '<p>加载中...</p>';
+    try {
+        const resp = await fetch('/api/v1/products/tasks');
+        const data = await resp.json();
+        const tasks = data.tasks || [];
+
+        if (tasks.length === 0) {
+            list.innerHTML = '<p style="color:#666;text-align:center;">暂无同步记录</p>';
+            return;
         }
 
-        // 同步相关逻辑
-        document.getElementById('syncForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
+        list.innerHTML = '';
+        tasks.forEach(t => {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            const pct = t.progress || 0;
+            const statusClass = t.status === 'success' ? 'status-success' :
+                t.status === 'failed' ? 'status-failed' :
+                t.status === 'running' ? 'status-running' : 'status-pending';
+            const fillClass = t.status === 'success' ? 'success' :
+                t.status === 'failed' ? 'failed' : 'running';
 
-            const url = document.getElementById('cjUrl').value;
-            const syncBtn = document.getElementById('syncBtn');
-            const loading = document.getElementById('loading');
-            const status = document.getElementById('status');
-            const result = document.getElementById('result');
-
-            // 重置状态
-            status.style.display = 'none';
-            result.style.display = 'none';
-            syncBtn.disabled = true;
-            loading.style.display = 'block';
-
-            try {
-                // 验证URL格式
-                if (!url.includes('cjdropshipping.com') || !url.includes('/product/')) {
-                    throw new Error('请输入有效的CJ Dropshipping商品链接');
+            card.innerHTML = `
+                <div class="task-meta">
+                    <span><strong>#${t.task_id}</strong> ${t.task_type}</span>
+                    <span><span class="status-badge ${statusClass}">${t.status}</span></span>
+                </div>
+                <div style="margin-top:4px;font-size:0.85em;color:#555;">${t.message || ''}</div>
+                <div class="task-progress-small"><div class="fill ${fillClass}" style="width:${pct}%"></div></div>
+                <div style="font-size:0.75em;color:#999;margin-top:4px;">${t.created_at || ''}</div>
+            `;
+            card.onclick = function() {
+                // 点击卡片，在任务面板中查看详情
+                if (t.status === 'running') {
+                    modal.style.display = 'none';
+                    taskPanel.style.display = 'block';
+                    updateTaskUI(t);
+                    startPolling(t.task_id);
                 }
-
-                // 发送同步请求
-                const response = await fetch('/api/v1/products/sync/single', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        product_url: url
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // 显示成功结果
-                    document.getElementById('productName').textContent = data.product_name || '-';
-                    document.getElementById('magentoId').textContent = data.magento_product_id || '-';
-                    document.getElementById('sku').textContent = data.sku || '-';
-
-                    const magentoUrl = document.getElementById('magentoUrl');
-                    if (data.magento_url) {
-                        magentoUrl.href = data.magento_url;
-                        magentoUrl.style.display = 'inline';
-                    } else {
-                        magentoUrl.style.display = 'none';
-                    }
-
-                    result.style.display = 'block';
-                    showStatus('产品同步成功！', 'success');
-                } else {
-                    // 显示错误信息
-                    showStatus(`同步失败：${data.error || data.message || data.error_message || '未知错误'}`, 'error');
-                }
-
-            } catch (error) {
-                console.error('同步错误:', error);
-                showStatus(`同步失败：${error.message}`, 'error');
-            } finally {
-                syncBtn.disabled = false;
-                loading.style.display = 'none';
-            }
+            };
+            list.appendChild(card);
         });
-
-        function showStatus(message, type) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = `status ${type}`;
-            status.style.display = 'block';
-        }
-
-        // URL输入时实时验证
-        document.getElementById('cjUrl').addEventListener('input', function (e) {
-            const url = e.target.value;
-            const syncBtn = document.getElementById('syncBtn');
-
-            if (url && url.includes('cjdropshipping.com') && url.includes('/product/')) {
-                syncBtn.disabled = false;
-            } else {
-                syncBtn.disabled = true;
-            }
-        });
-    </script>
+    } catch(err) {
+        list.innerHTML = `<p style="color:red;">加载失败: ${err.message}</p>`;
+    }
+}
+</script>
 </body>
-
 </html>
