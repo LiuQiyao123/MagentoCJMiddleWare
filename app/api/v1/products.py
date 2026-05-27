@@ -109,6 +109,8 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
         cj_desc = cj_product.get("description", "") or name
 
         children = []
+        created_skus = [sku]  # 跟踪所有创建的SKU，用于回滚
+        created_ids = [str(mid)]
         if root_variants:
             total_variants = len(root_variants)
             await task_manager.update_progress(task_id, 60, f"开始创建 {total_variants} 个变体...")
@@ -129,7 +131,10 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
                     }
                     child_result = await service.magento_client.create_product(child_data)
                     child_sku_created = child_result.get("sku", child_sku)
-                    children.append({"sku": child_sku_created, "variant_key": vk})
+                    child_id = child_result.get("id")
+                    children.append({"sku": child_sku_created, "variant_key": vk, "id": child_id})
+                    created_skus.append(child_sku_created)
+                    created_ids.append(str(child_id))
 
                     # 上传变体图
                     vimg = variant.get("variantImage", "")
@@ -139,22 +144,25 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
                         except Exception as ime:
                             await task_manager.add_error(task_id, f"变体 {vk} 图片上传失败: {str(ime)[:80]}")
 
-                    # 更新进度
                     pct = 60 + int((idx + 1) / total_variants * 35)
                     await task_manager.update_progress(task_id, pct, f"变体 {vk} ({idx+1}/{total_variants}) 完成")
-                    await asyncio.sleep(0.3)  # 避免API限流
+                    await asyncio.sleep(0.3)
 
                 except Exception as ve:
                     err_msg = str(ve)[:80]
                     await task_manager.add_error(task_id, f"变体 {variant.get('variantKey', str(idx))} 创建失败: {err_msg}")
 
-        # 完成
+        # 存储创建的SKU清单到任务数据中，用于回滚
+        await task_manager.update_data(task_id, {"created_skus": created_skus, "created_ids": created_ids})
+
         from app.config.settings import get_settings
         settings = get_settings()
         result = {
             "product_name": name[:80], "magento_id": mid, "sku": sku,
             "variants": len(children),
-            "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{mid}"
+            "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{mid}",
+            "created_skus": created_skus,
+            "created_ids": created_ids
         }
         await task_manager.mark_success(task_id, result)
         await task_manager.update_progress(task_id, 100, f"同步完成! 主商品+{len(children)}个变体")
@@ -204,3 +212,46 @@ async def list_tasks():
     """获取最近任务列表"""
     tasks = await task_manager.list_tasks(limit=50)
     return {"tasks": tasks}
+
+
+@router.delete("/tasks/{task_id}/cleanup")
+async def cleanup_task(task_id: str):
+    """删除任务中所有已创建的商品（回滚）"""
+    from app.services.product_sync import get_product_sync_service
+    service = await get_product_sync_service()
+
+    task = await task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 获取创建的SKU列表
+    task_data = json.loads(task.get("task_data", "{}"))
+    created_skus = task_data.get("created_skus", [])
+    if not created_skus:
+        # 尝试从result中获取
+        result = json.loads(task.get("result", "{}")) if task.get("result") else {}
+        created_skus = result.get("created_skus", [])
+
+    if not created_skus:
+        return {"success": False, "message": "无可清理的商品数据", "deleted": 0}
+
+    deleted = 0
+    errors = []
+    for sku in reversed(created_skus):  # 先删变体，再删主商品
+        try:
+            await service.magento_client.delete_product(sku)
+            deleted += 1
+        except Exception as e:
+            errors.append({"sku": sku, "error": str(e)[:60]})
+
+    # 更新任务状态
+    await task_manager.update_progress(task_id, 0, f"已清理 {deleted}/{len(created_skus)} 个商品")
+    await task_manager.mark_failed(task_id, f"用户已回滚，删除了 {deleted} 个商品")
+
+    return {
+        "success": True,
+        "deleted": deleted,
+        "total": len(created_skus),
+        "errors": errors,
+        "message": f"已删除 {deleted}/{len(created_skus)} 个商品"
+    }

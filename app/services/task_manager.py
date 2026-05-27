@@ -81,6 +81,12 @@ class TaskManager:
         await client.hset(key, "errors", json.dumps(errors, ensure_ascii=False))
         await client.hset(key, "updated_at", datetime.utcnow().isoformat())
 
+    async def update_data(self, task_id: str, data: Dict[str, Any]):
+        """更新任务的自定义数据（存储中间结果，如 created_skus）"""
+        client = await redis_manager.get_client()
+        key = f"{TASK_PREFIX}{task_id}"
+        await client.hset(key, "task_data", json.dumps(data, ensure_ascii=False))
+    
     async def add_error(self, task_id: str, error: str):
         """添加错误记录"""
         client = await redis_manager.get_client()

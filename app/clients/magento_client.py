@@ -134,6 +134,25 @@ class MagentoClient:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+
+    async def _refresh_token(self) -> None:
+        """重新获取 Magento admin token（401 时自动调用）"""
+        try:
+            login_url = f"{self.base_url}/rest/V1/integration/admin/token"
+            resp = await self._client.post(
+                login_url,
+                json={"username": self.api_user, "password": self.api_password},
+                headers={"Content-Type": "application/json"}
+            )
+            if resp.status_code == 200:
+                new_token = resp.json()
+                if isinstance(new_token, str) and len(new_token) > 20:
+                    self.api_token = new_token
+                    logger.info("Magento token refreshed automatically")
+                    return
+            logger.warning("Token refresh failed", extra={"status": resp.status_code, "body": resp.text[:100]})
+        except Exception as e:
+            logger.error("Token refresh error", extra={"error": str(e)})
     
     async def _make_request(
         self,
@@ -143,7 +162,7 @@ class MagentoClient:
         params: Optional[Dict] = None,
         retry_count: int = 0
     ) -> Dict[str, Any]:
-        """发送API请求"""
+        """发送API请求（带自动token刷新）"""
         try:
             url = f"{self.base_url}/rest/V1/{endpoint.lstrip('/')}"
             
@@ -154,6 +173,20 @@ class MagentoClient:
                 params=params,
                 headers=self._get_headers()
             )
+            
+            # 401 → token过期 → 刷新后重试一次
+            if response.status_code == 401 and retry_count < 1:
+                logger.info("Token expired, refreshing...")
+                await self._refresh_token()
+                response = await self._client.request(
+                    method=method,
+                    url=url,
+                    json=data,
+                    params=params,
+                    headers=self._get_headers()
+                )
+                if response.status_code in [200, 201]:
+                    return response.json()
             
             if response.status_code not in [200, 201]:
                 raise MagentoAPIError(

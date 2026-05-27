@@ -153,6 +153,11 @@
             <div id="errorList"></div>
         </div>
 
+        <div id="cleanupArea" style="display:none;margin-bottom:10px;">
+            <button class="btn btn-sm btn-secondary" id="cleanupBtn" style="background:#e53e3e;" onclick="cleanupTask()">🗑 回滚此任务（删除所有已创建的商品）</button>
+            <div id="cleanupResult" style="margin-top:6px;font-size:0.9em;"></div>
+        </div>
+
         <strong style="font-size:0.9em;">📝 运行日志：</strong>
         <div class="task-logs" id="taskLogs"></div>
     </div>
@@ -242,7 +247,11 @@ document.getElementById('syncForm').addEventListener('submit', async function(e)
 });
 
 // 轮询任务状态
+let currentTaskId = null;
+
 function startPolling(taskId) {
+    currentTaskId = taskId;
+    document.getElementById('cleanupArea').style.display = 'none';
     if (pollTimer) clearInterval(pollTimer);
 
     pollTimer = setInterval(async () => {
@@ -277,6 +286,8 @@ function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
+let currentTaskId = null;
+
 // 更新UI
 function updateTaskUI(task) {
     // 进度条
@@ -297,6 +308,17 @@ function updateTaskUI(task) {
     const s = statusMap[task.status] || { text: task.status, cls: '' };
     taskStatusLabel.textContent = s.text;
     taskStatusLabel.className = 'task-status ' + s.cls;
+
+    // 失败或完成时显示回滚按钮（如果有创建的商品）
+    if ((task.status === 'failed' || task.status === 'success') && currentTaskId) {
+        const taskData = task.task_data ? (typeof task.task_data === 'string' ? JSON.parse(task.task_data) : task.task_data) : {};
+        const resultData = task.result ? (typeof task.result === 'string' ? JSON.parse(task.result) : task.result) : {};
+        const createdSkus = taskData.created_skus || resultData.created_skus || [];
+        if (createdSkus.length > 0) {
+            document.getElementById('cleanupArea').style.display = 'block';
+            document.getElementById('cleanupBtn').textContent = `🗑 回滚（删除 ${createdSkus.length} 个已创建的商品）`;
+        }
+    }
 
     // 错误
     if (task.errors && task.errors.length > 0) {
@@ -354,6 +376,35 @@ document.getElementById('viewTasksBtn').onclick = function() {
 document.querySelector('.close').onclick = function() { modal.style.display = 'none'; };
 window.onclick = function(e) { if (e.target == modal) modal.style.display = 'none'; };
 document.getElementById('refreshTasks').onclick = loadTaskList;
+
+// 回滚任务
+async function cleanupTask() {
+    if (!currentTaskId) return;
+    if (!confirm('确定要删除此任务创建的所有商品吗？此操作不可撤销！')) return;
+
+    const btn = document.getElementById('cleanupBtn');
+    const result = document.getElementById('cleanupResult');
+    btn.disabled = true;
+    btn.textContent = '⏳ 正在回滚...';
+    result.textContent = '';
+
+    try {
+        const resp = await fetch(`/api/v1/products/tasks/${currentTaskId}/cleanup`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            result.style.color = '#38a169';
+            result.textContent = `✅ ${data.message}`;
+        } else {
+            result.style.color = '#e53e3e';
+            result.textContent = `❌ ${data.message}`;
+        }
+    } catch(err) {
+        result.style.color = '#e53e3e';
+        result.textContent = `❌ 回滚失败: ${err.message}`;
+    }
+    btn.disabled = false;
+    btn.textContent = '🗑 回滚此任务';
+}
 
 async function loadTaskList() {
     const list = document.getElementById('taskList');
