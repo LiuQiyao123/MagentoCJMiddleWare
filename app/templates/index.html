@@ -286,8 +286,6 @@ function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
-let currentTaskId = null;
-
 // 更新UI
 function updateTaskUI(task) {
     // 进度条

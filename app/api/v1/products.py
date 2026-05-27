@@ -59,7 +59,12 @@ async def sync_single_product(
 
 
 async def _run_sync(task_id: str, product_id: str, product_url: str, service: ProductSyncService):
-    """后台执行同步任务"""
+    """后台执行同步任务（支持可配置商品）"""
+    from app.services.attribute_mapper import (
+        extract_dimensions, ensure_attribute_option,
+        parse_variant_values, get_attribute_id
+    )
+    
     try:
         await task_manager.update_progress(task_id, 5, "开始同步...")
 
@@ -81,58 +86,120 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
                 root_variants = vd if isinstance(vd, list) else vd.get("list", [])
         await task_manager.update_progress(task_id, 30, f"找到 {len(root_variants)} 个变体", f"[CJ] 变体数: {len(root_variants)}")
 
-        # 3. 构建商品
-        magento_product = service._build_magento_product(cj_product, root_variants)
-        image_url = magento_product.pop("_image_url", None)
+        # 3. 提取维度 & 创建属性选项
+        dimensions = extract_dimensions(cj_product, root_variants)
+        has_multiple_dims = len(dimensions) > 0 and len(root_variants) > 1
+        
+        if has_multiple_dims:
+            await task_manager.update_progress(task_id, 33, f"检测到 {len(dimensions)} 个变体维度", f"[属性] 维度: {[d[0] for d in dimensions]}")
+            # 为所有维度创建选项
+            dim_count = len(dimensions)
+            for v in root_variants:
+                vals = parse_variant_values(v.get("variantKey", ""), dim_count)
+                for i, val in enumerate(vals):
+                    if val.strip():
+                        ensure_attribute_option(dimensions[i][0], val.strip())
+            await task_manager.update_progress(task_id, 35, "属性选项就绪")
 
-        # 4. 创建主商品
-        await task_manager.update_progress(task_id, 35, "正在创建Magento主商品...", "[Magento] 创建主商品")
-        magento_result = await service.magento_client.create_product(magento_product)
-        sku = magento_product["sku"]
-        mid = magento_result.get("id")
-        await task_manager.update_progress(task_id, 45, f"主商品创建成功 (ID: {mid})", f"[Magento] 主商品ID: {mid}, SKU: {sku}")
-
-        # 5. 上传主图
-        if image_url:
-            await task_manager.update_progress(task_id, 50, "正在上传主图...", "[图片] 下载并上传主图")
-            try:
-                await service._upload_product_image(sku, image_url)
-                await task_manager.update_progress(task_id, 55, "主图上传完成", "[图片] 主图上传成功")
-            except Exception as e:
-                await task_manager.add_error(task_id, f"主图上传失败: {str(e)[:100]}")
-                await task_manager.update_progress(task_id, 55, "主图上传失败(已跳过)", f"[图片] 主图上传失败: {str(e)[:60]}")
-
-        # 6. 创建变体
+        # 4. 构建主商品
         name = cj_product.get("productNameEn", "") or str(cj_product.get("productName", ""))
         cj_price = service._parse_range_value(cj_product.get("suggestSellPrice", cj_product.get("sellPrice", 0)))
         cj_weight = service._parse_range_value(cj_product.get("productWeight", 0))
         cj_desc = cj_product.get("description", "") or name
-
-        children = []
-        created_skus = [sku]  # 跟踪所有创建的SKU，用于回滚
+        
+        main_sku = f"CJ_{product_id}"
+        main_product = service._build_magento_product(cj_product, root_variants)
+        image_url = main_product.pop("_image_url", None)
+        
+        # 如果有多维度，创建为可配置商品
+        if has_multiple_dims:
+            main_product["type_id"] = "configurable"
+            main_product["visibility"] = 4
+            main_product["name"] = name[:200]
+            # 关联维度属性
+            dim_attr_ids = [get_attribute_id(d[0]) for d in dimensions if get_attribute_id(d[0])]
+            if dim_attr_ids:
+                main_product["extension_attributes"] = {
+                    "configurable_product_options": [
+                        {
+                            "attribute_id": str(aid),
+                            "label": dimensions[i][1],
+                            "position": i,
+                            "values": []
+                        }
+                        for i, aid in enumerate(dim_attr_ids) if aid
+                    ]
+                }
+        
+        await task_manager.update_progress(task_id, 38, "正在创建Magento主商品...", "[Magento] 创建主商品")
+        magento_result = await service.magento_client.create_product(main_product)
+        mid = magento_result.get("id")
+        await task_manager.update_progress(task_id, 45, f"主商品创建成功 (ID: {mid})", f"[Magento] 主商品ID: {mid}, SKU: {main_sku}")
+        
+        created_skus = [main_sku]
         created_ids = [str(mid)]
+
+        # 5. 上传主图
+        if image_url:
+            await task_manager.update_progress(task_id, 48, "正在上传主图...", "[图片] 下载并上传主图")
+            try:
+                await service._upload_product_image(main_sku, image_url)
+                await task_manager.update_progress(task_id, 50, "主图上传完成", "[图片] 主图上传成功")
+            except Exception as e:
+                await task_manager.add_error(task_id, f"主图上传失败: {str(e)[:100]}")
+
+        # 6. 创建变体子商品
+        children = []
+        child_ids = []
+        dim_count = len(dimensions) if has_multiple_dims else 0
+        
         if root_variants:
             total_variants = len(root_variants)
-            await task_manager.update_progress(task_id, 60, f"开始创建 {total_variants} 个变体...")
+            await task_manager.update_progress(task_id, 55, f"开始创建 {total_variants} 个变体...")
+            
             for idx, variant in enumerate(root_variants):
                 try:
                     vk = variant.get("variantKey", str(idx))
                     child_sku = f"CJ_{product_id}_{vk}"
+                    
+                    # 构建自定义属性（含维度值）
+                    cust_attrs = [
+                        {"attribute_code": "description", "value": cj_desc},
+                        {"attribute_code": "short_description", "value": f"{name[:100]} - {vk}"},
+                    ]
+                    
+                    variant_name_suffix = vk
+                    if has_multiple_dims:
+                        vals = parse_variant_values(vk, dim_count)
+                        dim_attr_ids = [get_attribute_id(d[0]) for d in dimensions]
+                        for i, val in enumerate(vals):
+                            if val.strip() and i < len(dim_attr_ids) and dim_attr_ids[i]:
+                                oid = ensure_attribute_option(dimensions[i][0], val.strip())
+                                if oid:
+                                    cust_attrs.append({
+                                        "attribute_code": dimensions[i][0],
+                                        "value": str(oid)
+                                    })
+                        variant_name_suffix = "-".join(v.strip() for v in vals if v.strip())
+                    
                     child_data = {
-                        "sku": child_sku, "name": f"{name[:150]} - {vk}"[:200],
-                        "price": cj_price, "status": 1, "visibility": 1,
-                        "type_id": "simple", "attribute_set_id": 4,
+                        "sku": child_sku,
+                        "name": f"{name[:150]} - {variant_name_suffix}"[:200],
+                        "price": cj_price,
+                        "status": 1,
+                        "visibility": 1,
+                        "type_id": "simple",
+                        "attribute_set_id": 4,
                         "weight": max(cj_weight, 0.001),
                         "extension_attributes": {},
-                        "custom_attributes": [
-                            {"attribute_code": "description", "value": cj_desc},
-                            {"attribute_code": "short_description", "value": f"{name[:100]} - {vk}"},
-                        ]
+                        "custom_attributes": cust_attrs
                     }
+                    
                     child_result = await service.magento_client.create_product(child_data)
                     child_sku_created = child_result.get("sku", child_sku)
                     child_id = child_result.get("id")
                     children.append({"sku": child_sku_created, "variant_key": vk, "id": child_id})
+                    child_ids.append(child_id)
                     created_skus.append(child_sku_created)
                     created_ids.append(str(child_id))
 
@@ -144,28 +211,63 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
                         except Exception as ime:
                             await task_manager.add_error(task_id, f"变体 {vk} 图片上传失败: {str(ime)[:80]}")
 
-                    pct = 60 + int((idx + 1) / total_variants * 35)
-                    await task_manager.update_progress(task_id, pct, f"变体 {vk} ({idx+1}/{total_variants}) 完成")
+                    pct = 55 + int((idx + 1) / total_variants * 40)
+                    await task_manager.update_progress(task_id, pct, f"变体 {variant_name_suffix} ({idx+1}/{total_variants}) 完成")
                     await asyncio.sleep(0.3)
 
                 except Exception as ve:
                     err_msg = str(ve)[:80]
                     await task_manager.add_error(task_id, f"变体 {variant.get('variantKey', str(idx))} 创建失败: {err_msg}")
 
-        # 存储创建的SKU清单到任务数据中，用于回滚
+        # 7. 关联子商品到可配置商品
+        if has_multiple_dims and child_ids and dim_attr_ids:
+            try:
+                await task_manager.update_progress(task_id, 96, "正在关联子商品...", "[Magento] 关联变体到可配置商品")
+                
+                # 获取可配置商品当前数据
+                link_data = {
+                    "product": {
+                        "sku": main_sku,
+                        "extension_attributes": {
+                            "configurable_product_options": [
+                                {
+                                    "attribute_id": str(aid),
+                                    "label": dimensions[i][1],
+                                    "position": i,
+                                    "values": []
+                                }
+                                for i, aid in enumerate(dim_attr_ids) if aid
+                            ],
+                            "configurable_product_links": child_ids
+                        }
+                    }
+                }
+                await service.magento_client._make_request(
+                    "PUT", f"/products/{main_sku}", data=link_data
+                )
+                await task_manager.update_progress(task_id, 98, "子商品关联完成")
+            except Exception as le:
+                await task_manager.add_error(task_id, f"关联子商品失败: {str(le)[:100]}")
+
+        # 存储创建的SKU清单
         await task_manager.update_data(task_id, {"created_skus": created_skus, "created_ids": created_ids})
 
         from app.config.settings import get_settings
         settings = get_settings()
         result = {
-            "product_name": name[:80], "magento_id": mid, "sku": sku,
+            "product_name": name[:80], "magento_id": mid, "sku": main_sku,
+            "product_type": "configurable" if has_multiple_dims and len(root_variants) > 1 else "simple",
             "variants": len(children),
+            "dimensions": [d[0] for d in dimensions] if has_multiple_dims else [],
             "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{mid}",
             "created_skus": created_skus,
             "created_ids": created_ids
         }
         await task_manager.mark_success(task_id, result)
-        await task_manager.update_progress(task_id, 100, f"同步完成! 主商品+{len(children)}个变体")
+        variant_msg = f"主商品+{len(children)}个变体"
+        if has_multiple_dims:
+            variant_msg += f" (可配置商品, {len(dimensions)}维)"
+        await task_manager.update_progress(task_id, 100, f"同步完成! {variant_msg}")
 
     except Exception as e:
         await task_manager.mark_failed(task_id, str(e)[:200])

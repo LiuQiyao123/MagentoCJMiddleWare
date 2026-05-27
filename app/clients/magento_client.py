@@ -189,6 +189,11 @@ class MagentoClient:
                     return response.json()
             
             if response.status_code not in [200, 201]:
+                logger.error("Magento API error", extra={
+                    "status": response.status_code,
+                    "response": response.text[:300],
+                    "endpoint": endpoint
+                })
                 raise MagentoAPIError(
                     error_code="MAGENTO_REQUEST_ERROR",
                     message=f"Magento API request failed with status {response.status_code}",
