@@ -1,0 +1,520 @@
+# Policy CMS page templates — English (US/EU/JP markets)
+# Drop-shipping friendly, GDPR compliant
+# Apply via: cms.apply_template("policy")
+
+# ════════════════════════════════════════════════════════════
+# 1. Privacy Policy — GDPR Compliant
+# ════════════════════════════════════════════════════════════
+# ⚠️ 以下内容需要你确认：
+#    - DPO 邮箱 (dpo@xxx) — 你可能没有专门设 DPO，改为 support@ 也行
+#    - 数据保留期（5年）— 瞎猜的，税务要求各国不同
+#    - 第三方服务商列表（PayPal/Stripe 等）— 不确认你实际用哪些
+#    - {{country}} — 瞎编占位，需要替换为实际注册国家
+- title: Privacy Policy
+  identifier: privacy-policy
+  type: page
+  active: true
+  content: |
+    <div class="policy-page" style="max-width: 800px; margin: 0 auto; line-height: 1.7;">
+      <h1>Privacy Policy</h1>
+      <p><em>Last updated: {{year}}</em></p>
+
+      <h2>1. Who We Are</h2>
+      <p>{{store_name}} ("we", "us", "our") operates the website at <strong>{{store_url}}</strong>. We are the data controller responsible for your personal data.</p>
+      <p>For data protection matters, you can contact us at:</p>
+      <ul>
+        <li>Email: <strong>dpo@{{store_url}}</strong></li>
+        <li>Our Data Protection Officer (DPO) is available for all GDPR-related inquiries.</li>
+      </ul>
+
+      <h2>2. What Personal Data We Collect</h2>
+      <p>We may collect, use, store and transfer the following categories of personal data:</p>
+
+      <h3>Identity Data</h3>
+      <ul>
+        <li>First name, last name, username</li>
+        <li>Billing and shipping address</li>
+        <li>Phone number</li>
+      </ul>
+
+      <h3>Financial Data</h3>
+      <ul>
+        <!-- ⚠️ 
+
+      <h3>Technical Data</h3>
+      <ul>
+        <li>IP address</li>
+        <li>Browser type and version</li>
+        <li>Device operating system</li>
+        <li>Time zone setting</li>
+        <li>Browsing behavior on our site (pages viewed, time spent, click patterns)</li>
+      </ul>
+
+      <h3>Profile Data</h3>
+      <ul>
+        <li>Your username and password</li>
+        <li>Purchase history and preferences</li>
+        <li>Feedback and survey responses</li>
+      </ul>
+
+      <h3>Marketing & Communications Data</h3>
+      <ul>
+        <li>Your email preferences</li>
+        <li>Communication history with our support team</li>
+      </ul>
+
+      <h2>3. How We Collect Your Data</h2>
+      <p>We collect data through:</p>
+      <ul>
+        <li><strong>Direct interactions:</strong> When you create an account, place an order, contact our support, subscribe to our newsletter, or complete a survey</li>
+        <li><strong>Automated technologies:</strong> Cookies, server logs, and similar tracking technologies when you browse our site</li>
+        <li><strong>Third parties:</strong> Payment processors, analytics providers (Google Analytics), and advertising networks</li>
+      </ul>
+
+      <h2>4. Legal Basis for Processing (GDPR)</h2>
+      <p>Under the General Data Protection Regulation (GDPR), we process your personal data on the following legal bases:</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <tr style="background: #f0f0f0;">
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Purpose</th>
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Lawful Basis</th>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Order processing and delivery</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Performance of a contract</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Payment processing</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Performance of a contract</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Sending order updates</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Performance of a contract</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Marketing emails (with consent)</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Consent</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Fraud prevention</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Legitimate interest</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Website analytics</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Consent (via cookie banner)</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Legal compliance</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Legal obligation</td>
+        </tr>
+      </table>
+
+      <h2>5. Cookies and Tracking Technologies</h2>
+      <p>Our website uses cookies to enhance your browsing experience. We use:</p>
+      <ul>
+        <li><strong>Essential cookies:</strong> Required for the website to function (shopping cart, login session)</li>
+        <li><strong>Analytics cookies:</strong> To understand how you use our site (Google Analytics)</li>
+        <li><strong>Functional cookies:</strong> To remember your preferences</li>
+        <li><strong>Marketing cookies:</strong> To show you relevant advertisements</li>
+      </ul>
+      <p>You can control cookies through your browser settings. A cookie consent banner will appear on your first visit to our site where you can manage your preferences.</p>
+
+      <h2>6. How We Use Your Data</h2>
+      <p>We use your personal data for the following purposes:</p>
+      <ul>
+        <li>To process and fulfill your orders (including payment, shipping, and returns)</li>
+        <li>To manage your account and provide customer support</li>
+        <li>To send you order confirmations, shipping updates, and service messages</li>
+        <li>To detect and prevent fraud</li>
+        <li>To improve our website, products, and services</li>
+        <li>To comply with legal and regulatory obligations</li>
+        <li><strong>With your explicit consent:</strong> To send you marketing communications and newsletters</li>
+      </ul>
+
+      <h2>7. Data Retention</h2>
+      <p>We will only retain your personal data for as long as necessary to fulfill the purposes we collected it for, including for the purposes of satisfying any legal, accounting, or reporting requirements.</p>
+      <ul>
+        <li>Order data: Retained for <strong>5 years</strong> after the last order (tax/legal requirements)</li>
+        <li>Account data: Retained until you delete your account</li>
+        <li>Marketing data: Retained until you unsubscribe</li>
+        <li>Cookie data: As specified in our cookie consent tool</li>
+      </ul>
+
+      <h2>8. Third-Party Data Sharing</h2>
+      <p>We may share your data with the following categories of third parties for legitimate business purposes:</p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <tr style="background: #f0f0f0;">
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Category</th>
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Examples</th>
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Purpose</th>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Payment Processors</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">PayPal, Stripe, Adyen</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Payment processing</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Shipping Carriers</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">USPS, FedEx, DHL, Japan Post</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Order delivery</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Analytics Providers</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Google Analytics</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Website analysis</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Email Service</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Mailchimp, SendGrid</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Transactional emails</td>
+        </tr>
+      </table>
+      <p>We require all third parties to respect the security of your personal data and to treat it in accordance with the law.</p>
+      <p><strong>We do not sell your personal data to any third party.</strong></p>
+
+      <h2>9. International Data Transfers</h2>
+      <p>Your personal data may be transferred to and processed in countries outside the European Economic Area (EEA), including the United States, China, and Japan. When we transfer your data internationally, we ensure appropriate safeguards are in place, including:</p>
+      <ul>
+        <li>Standard Contractual Clauses (SCCs) approved by the European Commission</li>
+        <li>Data Processing Agreements (DPAs) with our service providers</li>
+        <li>Adequacy decisions where applicable</li>
+      </ul>
+
+      <h2>10. Your GDPR Rights</h2>
+      <p>If you are located in the European Economic Area (EEA) or the United Kingdom, you have the following rights under GDPR:</p>
+
+      <ol>
+        <li><strong>Right to Access:</strong> Request a copy of the personal data we hold about you</li>
+        <li><strong>Right to Rectification:</strong> Request correction of inaccurate or incomplete data</li>
+        <li><strong>Right to Erasure (Right to be Forgotten):</strong> Request deletion of your personal data</li>
+        <li><strong>Right to Restrict Processing:</strong> Request restriction of how we process your data</li>
+        <li><strong>Right to Data Portability:</strong> Request transfer of your data to another service</li>
+        <li><strong>Right to Object:</strong> Object to processing based on legitimate interests or direct marketing</li>
+        <li><strong>Right to Withdraw Consent:</strong> Withdraw consent at any time (without affecting the lawfulness of previous processing)</li>
+        <li><strong>Right to Complain:</strong> Lodge a complaint with your local data protection supervisory authority</li>
+      </ol>
+
+      <p>To exercise any of these rights, please contact us at <strong>dpo@{{store_url}}</strong>. We will respond within <strong>30 days</strong> as required by GDPR.</p>
+
+      <h2>11. Data Security</h2>
+      <p>We have implemented appropriate technical and organizational security measures to protect your personal data, including:</p>
+      <ul>
+        <li>SSL/TLS encryption for all data transmitted between your browser and our servers</li>
+        <li>Encrypted storage of sensitive data</li>
+        <li>Regular security audits and vulnerability assessments</li>
+        <li>Access controls restricting data access to authorized personnel only</li>
+      </ul>
+
+      <h2>12. Data Breach Notification</h2>
+      <p>In the event of a data breach that poses a risk to your rights and freedoms, we will notify the relevant supervisory authority within 72 hours and, where required, inform you directly without undue delay.</p>
+
+      <h2>13. Children's Privacy</h2>
+      <p>Our services are not intended for individuals under the age of 16. We do not knowingly collect personal data from children. If you become aware that a child has provided us with personal data, please contact us immediately.</p>
+
+      <h2>14. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify you of any significant changes by posting the updated policy on this page with a new "Last updated" date.</p>
+
+      <h2>15. Contact & DPO</h2>
+      <p>For any questions, concerns, or to exercise your GDPR rights:</p>
+      <ul>
+        <li>Email (DPO): <strong>dpo@{{store_url}}</strong></li>
+        <li>Email (Support): <strong>support@{{store_url}}</strong></li>
+      </ul>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 2. Terms & Conditions — GDPR Compliant
+# ════════════════════════════════════════════════════════════
+- title: Terms & Conditions
+  identifier: terms-conditions
+  type: page
+  active: true
+  content: |
+    <div class="policy-page" style="max-width: 800px; margin: 0 auto; line-height: 1.7;">
+      <h1>Terms & Conditions</h1>
+      <p><em>Last updated: {{year}}</em></p>
+
+      <h2>1. General</h2>
+      <p>These Terms and Conditions govern your use of {{store_url}} and your purchase of products from {{store_name}}. By accessing our website and placing an order, you agree to be bound by these terms.</p>
+
+      <h2>2. Business Information</h2>
+      <p>{{store_name}} is an online retailer operating from {{country}}. For any legal correspondence, please contact us at:</p>
+      <ul>
+        <li>Email: <strong>support@{{store_url}}</strong></li>
+      </ul>
+
+      <h2>3. Products & Pricing</h2>
+      <ul>
+        <li>All prices are listed in <strong>USD</strong> and include applicable taxes where required by law</li>
+        <li>Prices may be updated at any time without prior notice</li>
+        <li>Product images are for illustration purposes; actual products may vary slightly</li>
+        <li>We make every effort to display accurate colors, but we cannot guarantee that your screen's display is accurate</li>
+      </ul>
+
+      <h2>4. Order Acceptance & Contract Formation</h2>
+      <ul>
+        <li>Placing an item in your cart does not reserve it</li>
+        <li>A binding contract is formed only when we send you the <strong>order confirmation email</strong></li>
+        <li>We reserve the right to refuse or cancel orders for reasons including: product unavailability, pricing errors, or suspected fraud</li>
+        <li>If we cancel an order, we will refund any payment made in full</li>
+      </ul>
+
+      <h2>5. Payment Terms</h2>
+      <ul>
+        <li>Payment is due at the time of order</li>
+        <li>We accept Visa, Mastercard, PayPal, Apple Pay, and Google Pay</li>
+        <li>All transactions are processed securely by our payment partners</li>
+        <li>We do not store full payment card details</li>
+      </ul>
+
+      <h2>6. Delivery & Risk</h2>
+      <ul>
+        <li>Estimated delivery times are provided as guidelines and are not guaranteed</li>
+        <li>Risk of loss and title for products pass to you upon delivery</li>
+        <li>International orders may be subject to customs fees and import duties, which are your responsibility</li>
+      </ul>
+
+      <h2>7. Right of Withdrawal (EU Customers)</h2>
+      <p>Under EU consumer law, you have the right to withdraw from your purchase within <strong>14 calendar days</strong> without giving any reason. This right applies to consumers in the European Union and European Economic Area.</p>
+      <p>To exercise this right, contact us at <strong>support@{{store_url}}</strong> within 14 days of receiving your order. You must return the goods within 14 days of notifying us.</p>
+
+      <h2>8. Warranty & Liability</h2>
+      <ul>
+        <li>Products are covered by a statutory warranty of conformity as required by applicable law</li>
+        <li>Our liability is limited to the purchase price of the product</li>
+        <li>We are not liable for indirect, incidental, or consequential damages</li>
+        <li>Nothing in these terms excludes or limits liability for death or personal injury caused by negligence, fraud, or any other liability that cannot be excluded by law</li>
+      </ul>
+
+      <h2>9. Intellectual Property</h2>
+      <p>All content on this website — including text, graphics, logos, images, and software — is the property of {{store_name}} and is protected by international copyright laws. You may not reproduce, distribute, or create derivative works without our written permission.</p>
+
+      <h2>10. Governing Law & Dispute Resolution</h2>
+      <ul>
+        <li>These terms are governed by the laws of {{country}}</li>
+        <li>For EU customers: disputes may be resolved through the European Commission's Online Dispute Resolution (ODR) platform at <a href="https://ec.europa.eu/consumers/odr/">https://ec.europa.eu/consumers/odr/</a></li>
+        <li>We commit to resolving complaints amicably before pursuing legal action</li>
+      </ul>
+
+      <h2>11. Changes to Terms</h2>
+      <p>We reserve the right to modify these terms at any time. Changes will be effective immediately upon posting. Continued use of our website after changes constitutes acceptance of the new terms.</p>
+
+      <h2>12. Contact</h2>
+      <p>For questions about these terms, contact us at <strong>support@{{store_url}}</strong>.</p>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 3. Return & Refund Policy
+# ════════════════════════════════════════════════════════════
+- title: Return & Refund Policy
+  identifier: return-policy
+  type: page
+  active: true
+  content: |
+    <div class="policy-page" style="max-width: 800px; margin: 0 auto; line-height: 1.7;">
+      <h1>Return & Refund Policy</h1>
+      <p><em>Last updated: {{year}}</em></p>
+
+      <h2>1. Return Window</h2>
+      <p>You have <strong>30 days</strong> from the date of delivery to request a return. For EU customers, your statutory <strong>14-day right of withdrawal</strong> applies as outlined in our Terms & Conditions.</p>
+
+      <h2>2. Return Conditions</h2>
+      <ul>
+        <li>Items must be unused, unwashed, and in original condition</li>
+        <li>All tags and original packaging must be intact</li>
+        <li>Proof of purchase (order number) is required</li>
+      </ul>
+
+      <h2>3. Non-Returnable Items</h2>
+      <ul>
+        <li>Intimate apparel and swimwear (hygiene reasons)</li>
+        <li>Items marked as final sale or clearance</li>
+        <li>Gift cards</li>
+        <li>Digital/downloadable products</li>
+      </ul>
+
+      <h2>4. How to Start a Return</h2>
+      <ol>
+        <li>Contact us at <strong>support@{{store_url}}</strong> with your order number</li>
+        <li>We will provide a return authorization and shipping instructions</li>
+        <li>Ship the item to the address provided</li>
+        <li>Once received and inspected, we process your refund</li>
+      </ol>
+
+      <h2>5. Refund Processing</h2>
+      <ul>
+        <li>Approved refunds are processed within <strong>5–7 business days</strong></li>
+        <li>Refunds are issued to your original payment method</li>
+        <li>You will receive a confirmation email once the refund is complete</li>
+      </ul>
+
+      <h2>6. Return Shipping</h2>
+      <p>Return shipping costs are the responsibility of the customer unless the item is defective or incorrect. For EU customers exercising the 14-day right of withdrawal, the direct cost of return shipping is borne by the customer unless otherwise agreed.</p>
+
+      <h2>7. Defective or Incorrect Items</h2>
+      <p>If you receive a defective or incorrect item, please contact us immediately. We will cover all return shipping costs and send a replacement or issue a full refund, including original shipping costs.</p>
+
+      <h2>8. Exchanges</h2>
+      <p>We do not offer direct exchanges. Please return the original item for a refund and place a new order.</p>
+
+      <h2>9. Contact</h2>
+      <p>Email: <strong>support@{{store_url}}</strong></p>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 4. Shipping Policy
+# ════════════════════════════════════════════════════════════
+- title: Shipping Policy
+  identifier: shipping-policy
+  type: page
+  active: true
+  content: |
+    <div class="policy-page" style="max-width: 800px; margin: 0 auto; line-height: 1.7;">
+      <h1>Shipping Policy</h1>
+      <p><em>Last updated: {{year}}</em></p>
+
+      <h2>1. Processing Time</h2>
+      <p>Orders are processed within <strong>1–3 business days</strong> after payment confirmation. During peak periods (holiday seasons, sales events), processing may take up to 5 business days.</p>
+
+      <h2>2. Shipping Options & Delivery Times</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <tr style="background: #f0f0f0;">
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Method</th>
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Est. Delivery</th>
+          <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Cost</th>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Standard Shipping</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">7–15 business days</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Calculated at checkout</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 10px;">Express Shipping</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">3–7 business days</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">Calculated at checkout</td>
+        </tr>
+      </table>
+      <p>Please note: delivery times are estimates and not guaranteed. Delays may occur due to customs processing, weather, or other unforeseen circumstances.</p>
+
+      <h2>3. Free Shipping</h2>
+      <p>Free standard shipping is available on orders over <strong>$59</strong>. This offer applies to standard shipping only and may be modified or discontinued at any time.</p>
+
+      <h2>4. Shipping Destinations</h2>
+      <p>We currently ship to the following regions:</p>
+      <ul>
+        <li><strong>United States</strong> — all 50 states</li>
+        <li><strong>Japan</strong> — nationwide</li>
+        <li><strong>European Union</strong> — all member states</li>
+        <li><strong>United Kingdom</strong></li>
+        <li><strong>Select other countries</strong> — available at checkout</li>
+      </ul>
+
+      <h2>5. Order Tracking</h2>
+      <p>Once your order is shipped, you will receive a confirmation email with a tracking number. Tracking information typically becomes available within 24–48 hours of shipment.</p>
+
+      <h2>6. Customs, Duties & Taxes</h2>
+      <ul>
+        <li>International orders may be subject to import duties, customs fees, and local taxes</li>
+        <li>These charges are the <strong>responsibility of the customer</strong></li>
+        <li>Customs policies vary by country; please check with your local customs office</li>
+        <li>We are not responsible for delays caused by customs clearance</li>
+      </ul>
+
+      <h2>7. Incorrect Address</h2>
+      <p>We are not responsible for packages delivered to an incorrect address provided by the customer. Please verify your shipping address carefully before completing your order.</p>
+
+      <h2>8. Lost or Damaged Packages</h2>
+      <ul>
+        <li><strong>Lost packages:</strong> If your tracking shows no movement for 15 business days, contact us and we will investigate</li>
+        <li><strong>Damaged packages:</strong> If your order arrives damaged, contact us within 48 hours with photos of the damage and packaging</li>
+      </ul>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 5. About Us
+# ════════════════════════════════════════════════════════════
+- title: About Us
+  identifier: about-us
+  type: page
+  active: true
+  content: |
+    <div class="about-page" style="max-width: 700px; margin: 0 auto; line-height: 1.7;">
+      <h1>About {{store_name}}</h1>
+      <p>Welcome to {{store_name}} — your destination for quality products at affordable prices.</p>
+      <p>We are an independent online retailer committed to bringing you carefully curated products sourced from trusted suppliers around the world. Whether you are in the US, Japan, Europe, or beyond, we strive to deliver a seamless shopping experience.</p>
+
+      <h2>Our Mission</h2>
+      <p>To make quality products accessible to everyone, everywhere, without the premium price tag. We believe great style and functionality should not break the bank.</p>
+
+      <h2>What Sets Us Apart</h2>
+      <ul>
+        <li>Carefully selected product range</li>
+        <li>Competitive pricing through efficient supply chain</li>
+        <li>Customer-first approach with dedicated support</li>
+        <li>Secure and hassle-free checkout</li>
+      </ul>
+
+      <h2>Contact Us</h2>
+      <p>Have questions or feedback? We'd love to hear from you at <strong>support@{{store_url}}</strong>.</p>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 6. Frequently Asked Questions
+# ════════════════════════════════════════════════════════════
+- title: Frequently Asked Questions
+  identifier: faq
+  type: page
+  active: true
+  content: |
+    <div class="faq-page" style="max-width: 700px; margin: 0 auto; line-height: 1.7;">
+      <h1>Frequently Asked Questions</h1>
+
+      <h3>How do I place an order?</h3>
+      <p>Browse our products → Add items to your cart → Proceed to checkout → Enter your shipping details → Complete payment. You will receive an order confirmation email once your order is placed.</p>
+
+      <h3>What payment methods do you accept?</h3>
+      <p>We accept Visa, Mastercard, American Express, PayPal, Apple Pay, and Google Pay.</p>
+
+      <h3>How can I track my order?</h3>
+      <p>Once shipped, you will receive a tracking number via email. You can track your order through your account dashboard or by contacting our support team.</p>
+
+      <h3>Can I change or cancel my order?</h3>
+      <p>Orders can be modified or canceled within 1 hour of placement. After that, the order enters processing and cannot be changed. Contact us immediately if you need to make changes.</p>
+
+      <h3>How long does delivery take?</h3>
+      <p>Standard shipping takes 7–15 business days. Express shipping takes 3–7 business days. Processing time is 1–3 business days.</p>
+
+      <h3>Do you ship to my country?</h3>
+      <p>We ship to the United States, Japan, European Union, United Kingdom, and select other countries. Check availability at checkout.</p>
+
+      <h3>What is your return policy?</h3>
+      <p>We offer a 30-day return window for most items. EU customers also have a statutory 14-day right of withdrawal. See our <a href="{{store_url}}/return-policy">Return Policy</a> for full details.</p>
+
+      <h3>Will I have to pay customs fees?</h3>
+      <p>International orders may be subject to import duties and taxes. These charges are the responsibility of the customer. Customs policies vary by country.</p>
+
+      <h3>How do I contact customer support?</h3>
+      <p>Email us at <strong>support@{{store_url}}</strong>. We aim to respond within 24 hours on business days.</p>
+
+      <h3>Is my personal information secure?</h3>
+      <p>Yes. We use SSL encryption and follow strict data protection practices in compliance with GDPR. See our <a href="{{store_url}}/privacy-policy">Privacy Policy</a> for details.</p>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 7. Footer Block
+# ════════════════════════════════════════════════════════════
+- title: Footer Links
+  identifier: footer-info
+  type: block
+  active: true
+  content: |
+    <div class="footer-links" style="text-align: center; padding: 15px 10px;">
+      <a href="{{store_url}}/about-us">About Us</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/privacy-policy">Privacy Policy</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/return-policy">Returns</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/shipping-policy">Shipping</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/faq">FAQ</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/terms-conditions">Terms</a> &nbsp;|&nbsp;
+      <a href="{{store_url}}/contact-us">Contact</a>
+      <p style="margin-top: 10px; color: #888; font-size: 13px;">&copy; {{year}} {{store_name}}. All rights reserved.</p>
+    </div>

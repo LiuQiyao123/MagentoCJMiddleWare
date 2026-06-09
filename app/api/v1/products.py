@@ -116,20 +116,33 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
             main_product["type_id"] = "configurable"
             main_product["visibility"] = 4
             main_product["name"] = name[:200]
-            # 关联维度属性
+            # 关联维度属性（含所有选项值ID）
             dim_attr_ids = [get_attribute_id(d[0]) for d in dimensions if get_attribute_id(d[0])]
+            dim_count = len(dimensions)
             if dim_attr_ids:
-                main_product["extension_attributes"] = {
-                    "configurable_product_options": [
-                        {
-                            "attribute_id": str(aid),
-                            "label": dimensions[i][1],
-                            "position": i,
-                            "values": []
-                        }
-                        for i, aid in enumerate(dim_attr_ids) if aid
-                    ]
-                }
+                # 收集每个属性的所有选项值ID
+                configurable_options = []
+                for i, aid in enumerate(dim_attr_ids):
+                    if not aid:
+                        continue
+                    value_ids = []
+                    for v in root_variants:
+                        vals = parse_variant_values(v.get("variantKey", ""), dim_count)
+                        if i < len(vals) and vals[i].strip():
+                            oid = ensure_attribute_option(dimensions[i][0], vals[i].strip())
+                            if oid and oid not in value_ids:
+                                value_ids.append(oid)
+                    configurable_options.append({
+                        "attribute_id": str(aid),
+                        "label": dimensions[i][1],
+                        "position": i,
+                        "values": [{"value_index": oid} for oid in value_ids]
+                    })
+                
+                if configurable_options:
+                    main_product["extension_attributes"] = {
+                        "configurable_product_options": configurable_options
+                    }
         
         await task_manager.update_progress(task_id, 38, "正在创建Magento主商品...", "[Magento] 创建主商品")
         magento_result = await service.magento_client.create_product(main_product)
@@ -220,24 +233,15 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
                     await task_manager.add_error(task_id, f"变体 {variant.get('variantKey', str(idx))} 创建失败: {err_msg}")
 
         # 7. 关联子商品到可配置商品
-        if has_multiple_dims and child_ids and dim_attr_ids:
+        if has_multiple_dims and child_ids and dim_attr_ids and configurable_options:
             try:
                 await task_manager.update_progress(task_id, 96, "正在关联子商品...", "[Magento] 关联变体到可配置商品")
                 
-                # 获取可配置商品当前数据
                 link_data = {
                     "product": {
                         "sku": main_sku,
                         "extension_attributes": {
-                            "configurable_product_options": [
-                                {
-                                    "attribute_id": str(aid),
-                                    "label": dimensions[i][1],
-                                    "position": i,
-                                    "values": []
-                                }
-                                for i, aid in enumerate(dim_attr_ids) if aid
-                            ],
+                            "configurable_product_options": configurable_options,
                             "configurable_product_links": child_ids
                         }
                     }

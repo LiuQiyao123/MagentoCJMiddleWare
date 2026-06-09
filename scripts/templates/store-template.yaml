@@ -1,0 +1,350 @@
+# 店铺完整模板 — 开箱即用的成熟独立站
+# 包含：促销条、信任徽章、分类导航、商品推荐、页脚等所有区块
+# 应用方式：cms.apply_template("store-template")
+
+# ════════════════════════════════════════════════════════════
+# 1. 全局促销条 — 页面顶部公告
+# ════════════════════════════════════════════════════════════
+- title: Global Promo Bar
+  identifier: promo-bar
+  type: block
+  active: true
+  content: |
+    <div class="promo-bar" style="
+      background: #1a1a2e;
+      color: #fff;
+      text-align: center;
+      padding: 8px 16px;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    ">
+      🚚 Free shipping on orders over $59 &nbsp;|&nbsp; 🔒 Secure checkout &nbsp;|&nbsp; 💳 Pay with PayPal & Credit Card
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 2. 信任徽章 — 商品详情页/购物车页
+# ════════════════════════════════════════════════════════════
+- title: Trust Badges
+  identifier: trust-badges
+  type: block
+  active: true
+  content: |
+    <div class="trust-badges" style="
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      padding: 25px 10px;
+      max-width: 900px;
+      margin: 0 auto;
+    ">
+      <div class="badge" style="flex: 1; min-width: 120px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 6px;">🚚</div>
+        <strong style="font-size: 13px;">Free Shipping</strong>
+        <p style="font-size: 11px; color: #888; margin: 2px 0 0;">On orders over $59</p>
+      </div>
+      <div class="badge" style="flex: 1; min-width: 120px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 6px;">🔒</div>
+        <strong style="font-size: 13px;">Secure Checkout</strong>
+        <p style="font-size: 11px; color: #888; margin: 2px 0 0;">SSL encrypted</p>
+      </div>
+      <div class="badge" style="flex: 1; min-width: 120px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 6px;">↩️</div>
+        <strong style="font-size: 13px;">30-Day Returns</strong>
+        <p style="font-size: 11px; color: #888; margin: 2px 0 0;">Hassle-free</p>
+      </div>
+      <div class="badge" style="flex: 1; min-width: 120px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 6px;">💬</div>
+        <strong style="font-size: 13px;">24/7 Support</strong>
+        <p style="font-size: 11px; color: #888; margin: 2px 0 0;">We're here to help</p>
+      </div>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 3. 首页 — Hero Banner + 特性 + 分类 + 精品推荐 + 订阅
+# ════════════════════════════════════════════════════════════
+- title: Home
+  identifier: home
+  type: page
+  active: true
+  page_layout: 1column
+  content: |
+    <div class="homepage">
+      <!-- ═══ Hero Banner ═══ -->
+      <section class="hero" style="
+        background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+        padding: 100px 20px;
+        text-align: center;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+      ">
+        <div style="position: relative; z-index: 1; max-width: 800px; margin: 0 auto;">
+          <h1 style="font-size: 48px; margin-bottom: 16px; font-weight: 800; line-height: 1.2;">
+            Discover Your<br>New Favorite
+          </h1>
+          <p style="font-size: 20px; opacity: 0.85; margin-bottom: 35px; max-width: 500px; margin-left: auto; margin-right: auto;">
+            Curated quality products shipped to your door
+          </p>
+          <a href="/shop" class="btn-primary" style="
+            display: inline-block;
+            padding: 16px 50px;
+            background: #fff;
+            color: #1a1a2e;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 17px;
+            font-weight: 700;
+            transition: transform 0.2s, box-shadow 0.2s;
+          ">Shop Now →</a>
+          <div style="margin-top: 30px; font-size: 13px; opacity: 0.6;">
+            ✓ Free shipping on orders $59+ &nbsp; ✓ 30-day returns &nbsp; ✓ Secure checkout
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ Features Strip ═══ -->
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: #eee;">
+        <div style="background: #fff; padding: 25px 15px; text-align: center;">
+          <div style="font-size: 30px;">🌍</div>
+          <strong style="display: block; margin-top: 8px;">Worldwide</strong>
+          <span style="font-size: 13px; color: #888;">US, EU, JP & more</span>
+        </div>
+        <div style="background: #fff; padding: 25px 15px; text-align: center;">
+          <div style="font-size: 30px;">⭐</div>
+          <strong style="display: block; margin-top: 8px;">Quality Checked</strong>
+          <span style="font-size: 13px; color: #888;">Each item inspected</span>
+        </div>
+        <div style="background: #fff; padding: 25px 15px; text-align: center;">
+          <div style="font-size: 30px;">💳</div>
+          <strong style="display: block; margin-top: 8px;">Easy Payments</strong>
+          <span style="font-size: 13px; color: #888;">PayPal & Credit Card</span>
+        </div>
+        <div style="background: #fff; padding: 25px 15px; text-align: center;">
+          <div style="font-size: 30px;">↩️</div>
+          <strong style="display: block; margin-top: 8px;">Easy Returns</strong>
+          <span style="font-size: 13px; color: #888;">30-day guarantee</span>
+        </div>
+      </section>
+
+      <!-- ═══ Category Grid ═══ -->
+      <section style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+        <h2 style="text-align: center; font-size: 28px; margin-bottom: 8px;">Shop by Category</h2>
+        <p style="text-align: center; color: #888; margin-bottom: 35px;">Find exactly what you're looking for</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
+          <a href="/shop/new-arrivals" style="
+            display: block; padding: 50px 25px; background: #f8f9fa; border-radius: 12px;
+            text-align: center; text-decoration: none; color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+          ">
+            <div style="font-size: 40px; margin-bottom: 12px;">🆕</div>
+            <h3 style="margin: 0; font-size: 18px;">New Arrivals</h3>
+            <p style="color: #888; font-size: 14px; margin: 6px 0 0;">Latest products →</p>
+          </a>
+          <a href="/shop/bestsellers" style="
+            display: block; padding: 50px 25px; background: #f8f9fa; border-radius: 12px;
+            text-align: center; text-decoration: none; color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+          ">
+            <div style="font-size: 40px; margin-bottom: 12px;">🔥</div>
+            <h3 style="margin: 0; font-size: 18px;">Bestsellers</h3>
+            <p style="color: #888; font-size: 14px; margin: 6px 0 0;">Trending now →</p>
+          </a>
+          <a href="/shop/sale" style="
+            display: block; padding: 50px 25px; background: #f8f9fa; border-radius: 12px;
+            text-align: center; text-decoration: none; color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+          ">
+            <div style="font-size: 40px; margin-bottom: 12px;">🏷️</div>
+            <h3 style="margin: 0; font-size: 18px;">Special Offers</h3>
+            <p style="color: #888; font-size: 14px; margin: 6px 0 0;">Limited time →</p>
+          </a>
+        </div>
+      </section>
+
+      <!-- ═══ Trust Banner ═══ -->
+      <section style="background: #f0f0f5; padding: 50px 20px; text-align: center;">
+        <div style="max-width: 600px; margin: 0 auto;">
+          <div style="font-size: 50px; margin-bottom: 10px;">🛡️</div>
+          <h2 style="font-size: 24px; margin-bottom: 8px;">Shop with Confidence</h2>
+          <p style="color: #666;">Every purchase is protected. If something isn't right, we'll make it right.</p>
+          <div style="display: flex; justify-content: center; gap: 30px; margin-top: 20px; flex-wrap: wrap;">
+            <span style="font-size: 14px;">✅ Secure SSL checkout</span>
+            <span style="font-size: 14px;">✅ 30-day returns</span>
+            <span style="font-size: 14px;">✅ Tracking included</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ Newsletter ═══ -->
+      <section class="newsletter" style="padding: 60px 20px; text-align: center;">
+        <div style="max-width: 500px; margin: 0 auto;">
+          <h2 style="font-size: 26px; margin-bottom: 8px;">Stay in the Loop</h2>
+          <p style="color: #888; margin-bottom: 25px;">Get notified about new arrivals, exclusive offers, and more.</p>
+          <form style="display: flex; gap: 10px;">
+            <input type="email" placeholder="Your email address" required style="
+              flex: 1; padding: 14px 18px; border: 1px solid #ddd;
+              border-radius: 8px; font-size: 15px;
+            ">
+            <button type="submit" style="
+              padding: 14px 32px; background: #1a1a2e; color: #fff;
+              border: none; border-radius: 8px; font-size: 15px;
+              cursor: pointer; font-weight: 600;
+            ">Subscribe</button>
+          </form>
+          <p style="font-size: 12px; color: #aaa; margin-top: 12px;">
+            No spam. Unsubscribe anytime.
+          </p>
+        </div>
+      </section>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 4. 商品详情页信任增强 — 显示在商品详情下方
+# ════════════════════════════════════════════════════════════
+- title: Product Page Trust
+  identifier: product-trust
+  type: block
+  active: true
+  content: |
+    <div class="product-trust" style="
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    ">
+      <h4 style="margin: 0 0 15px; font-size: 15px;">Why shop with us?</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+        <div>🚚 Free shipping over $59</div>
+        <div>↩️ 30-day easy returns</div>
+        <div>🔒 Secure checkout</div>
+        <div>📦 Tracking included</div>
+        <div>💬 24/7 customer support</div>
+        <div>⭐ Quality guaranteed</div>
+      </div>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 5. 分类页描述
+# ════════════════════════════════════════════════════════════
+- title: Category Header
+  identifier: category-description
+  type: block
+  active: true
+  content: |
+    <div class="category-header" style="text-align: center; padding: 20px 10px;">
+      <p style="color: #666; font-size: 15px; margin: 0;">
+        Browse our curated collection. Quality products shipped worldwide.
+      </p>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 6. 购物车页信任 — 购物车底部安全提示
+# ════════════════════════════════════════════════════════════
+- title: Cart Trust Icons
+  identifier: cart-trust
+  type: block
+  active: true
+  content: |
+    <div class="cart-trust" style="
+      padding: 15px 0;
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+    ">
+      <span style="margin: 0 10px;">🔒 Secure SSL checkout</span>
+      <span style="margin: 0 10px;">💳 PayPal & Credit Card</span>
+      <span style="margin: 0 10px;">↩️ 30-day returns</span>
+    </div>
+
+# ════════════════════════════════════════════════════════════
+# 7. 页脚完整版 — 四栏式
+# ════════════════════════════════════════════════════════════
+- title: Footer Full
+  identifier: footer-info
+  type: block
+  active: true
+  content: |
+    <footer class="site-footer" style="
+      background: #1a1a2e;
+      color: #ccc;
+      padding: 40px 20px 20px;
+    ">
+      <div style="max-width: 1100px; margin: 0 auto;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 30px;">
+          <!-- Column 1: Brand -->
+          <div>
+            <h4 style="color: #fff; font-size: 18px; margin: 0 0 12px;">{{store_name}}</h4>
+            <p style="font-size: 13px; line-height: 1.6;">
+              Quality products curated for you. We bring the best from around the world.
+            </p>
+          </div>
+          <!-- Column 2: Shop -->
+          <div>
+            <h4 style="color: #fff; font-size: 14px; margin: 0 0 12px;">Shop</h4>
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/shop" style="color: #ccc; text-decoration: none;">All Products</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/shop/new-arrivals" style="color: #ccc; text-decoration: none;">New Arrivals</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/shop/bestsellers" style="color: #ccc; text-decoration: none;">Bestsellers</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/shop/sale" style="color: #ccc; text-decoration: none;">Sale</a></li>
+            </ul>
+          </div>
+          <!-- Column 3: Help -->
+          <div>
+            <h4 style="color: #fff; font-size: 14px; margin: 0 0 12px;">Help</h4>
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/contact-us" style="color: #ccc; text-decoration: none;">Contact Us</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/faq" style="color: #ccc; text-decoration: none;">FAQ</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/shipping-policy" style="color: #ccc; text-decoration: none;">Shipping Info</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/return-policy" style="color: #ccc; text-decoration: none;">Returns</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/size-guide" style="color: #ccc; text-decoration: none;">Size Guide</a></li>
+            </ul>
+          </div>
+          <!-- Column 4: Legal -->
+          <div>
+            <h4 style="color: #fff; font-size: 14px; margin: 0 0 12px;">Legal</h4>
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/privacy-policy" style="color: #ccc; text-decoration: none;">Privacy Policy</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/terms-conditions" style="color: #ccc; text-decoration: none;">Terms & Conditions</a></li>
+              <li style="margin-bottom: 6px;"><a href="{{store_url}}/about-us" style="color: #ccc; text-decoration: none;">About Us</a></li>
+            </ul>
+          </div>
+        </div>
+        <!-- Copyright -->
+        <div style="
+          border-top: 1px solid #333;
+          margin-top: 30px;
+          padding-top: 20px;
+          text-align: center;
+          font-size: 13px;
+          color: #666;
+        ">
+          <div style="margin-bottom: 8px;">
+            <span style="margin: 0 8px;">💳 PayPal</span>
+            <span style="margin: 0 8px;">💳 Visa</span>
+            <span style="margin: 0 8px;">💳 Mastercard</span>
+            <span style="margin: 0 8px;">💳 Amex</span>
+          </div>
+          <p style="margin: 0;">&copy; {{year}} {{store_name}}. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+
+# ════════════════════════════════════════════════════════════
+# 8. 页脚底部版权（精简版，备用）
+# ════════════════════════════════════════════════════════════
+- title: Footer Copyright Bar
+  identifier: footer-copyright
+  type: block
+  active: true
+  content: |
+    <div class="copyright-bar" style="
+      background: #0f0c1a;
+      color: #666;
+      text-align: center;
+      padding: 12px 10px;
+      font-size: 12px;
+    ">
+      &copy; {{year}} {{store_name}}. Made with ❤️
+    </div>
