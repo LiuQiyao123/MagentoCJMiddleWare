@@ -27,7 +27,7 @@ KEYWORD_RULES: List[Tuple[List[str], str, str]] = [
 def _get_db():
     """获取 Magento 数据库连接"""
     return pymysql.connect(
-        host="magento-project-db-1", port=3306,
+        host="magento-db", port=3306,
         user="magento", password="magento",
         database="magento",
         charset="utf8mb4"
