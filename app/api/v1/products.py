@@ -111,6 +111,8 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
         main_product = service._build_magento_product(cj_product, root_variants)
         image_url = main_product.pop("_image_url", None)
         
+        configurable_options = []
+        dim_attr_ids = []
         # 如果有多维度，创建为可配置商品
         if has_multiple_dims:
             main_product["type_id"] = "configurable"
