@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "magento-cj-middleware"
-version = "1.1.0"
+version = "1.1.1"
 description = "Magento 2 与 CJ Dropshipping 集成中台服务"
 authors = [
     {name = "Your Company", email = "your-email@company.com"}

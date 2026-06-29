@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     
     # 应用基础配置
     APP_NAME: str = Field(default="Magento-CJ-Middleware", description="应用名称")
-    APP_VERSION: str = Field(default="1.1.0", description="应用版本")
+    APP_VERSION: str = Field(default="1.1.1", description="应用版本")
     DEBUG: bool = Field(default=False, description="调试模式")
     HOST: str = Field(default="0.0.0.0", description="服务器地址")
     PORT: int = Field(default=3000, description="服务器端口")
@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     MAGENTO_API_USER: str = Field(description="Magento API用户")
     MAGENTO_API_PASSWORD: str = Field(description="Magento API密码")
     MAGENTO_TIMEOUT: int = Field(default=30, description="Magento API超时时间")
+    
+    # Magento 数据库配置（用于属性管理器直连 EAV 表）
+    MAGENTO_DB_HOST: str = Field(default="host.docker.internal", description="Magento数据库主机")
+    MAGENTO_DB_PORT: int = Field(default=33061, description="Magento数据库端口")
+    MAGENTO_DB_NAME: str = Field(default="magento", description="Magento数据库名称")
+    MAGENTO_DB_USER: str = Field(default="magento", description="Magento数据库用户")
+    MAGENTO_DB_PASSWORD: str = Field(default="magento", description="Magento数据库密码")
     MAGENTO_MAX_RETRIES: int = Field(default=3, description="Magento API最大重试次数")
     
     # 兼容旧配置

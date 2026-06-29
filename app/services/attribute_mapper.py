@@ -25,11 +25,13 @@ KEYWORD_RULES: List[Tuple[List[str], str, str]] = [
 
 
 def _get_db():
-    """获取 Magento 数据库连接"""
+    """获取 Magento 数据库连接（从配置读取）"""
+    from app.config.settings import get_settings
+    s = get_settings()
     return pymysql.connect(
-        host="magento-db", port=3306,
-        user="magento", password="magento",
-        database="magento",
+        host=s.MAGENTO_DB_HOST, port=s.MAGENTO_DB_PORT,
+        user=s.MAGENTO_DB_USER, password=s.MAGENTO_DB_PASSWORD,
+        database=s.MAGENTO_DB_NAME,
         charset="utf8mb4"
     )
 
