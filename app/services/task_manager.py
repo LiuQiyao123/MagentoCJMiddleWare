@@ -70,16 +70,20 @@ class TaskManager:
         await client.hset(key, "result", json.dumps(result, ensure_ascii=False) if result else "")
         await client.hset(key, "updated_at", datetime.utcnow().isoformat())
 
-    async def mark_failed(self, task_id: str, error: str):
+    async def mark_failed(self, task_id: str, error: str, traceback_str: str = ""):
         """标记任务失败"""
         client = await redis_manager.get_client()
         key = f"{TASK_PREFIX}{task_id}"
         await client.hset(key, "status", TaskStatus.FAILED)
         await client.hset(key, "message", f"失败: {error}")
         errors = json.loads((await client.hget(key, "errors")) or "[]")
-        errors.append({"time": datetime.utcnow().isoformat(), "error": error})
+        error_entry = {"time": datetime.utcnow().isoformat(), "error": error}
+        if traceback_str:
+            error_entry["traceback"] = traceback_str
+        errors.append(error_entry)
         await client.hset(key, "errors", json.dumps(errors, ensure_ascii=False))
         await client.hset(key, "updated_at", datetime.utcnow().isoformat())
+        logger.error("Task failed", extra={"task_id": task_id, "error": error, "traceback": traceback_str})
 
     async def update_data(self, task_id: str, data: Dict[str, Any]):
         """更新任务的自定义数据（存储中间结果，如 created_skus）"""
@@ -87,14 +91,18 @@ class TaskManager:
         key = f"{TASK_PREFIX}{task_id}"
         await client.hset(key, "task_data", json.dumps(data, ensure_ascii=False))
     
-    async def add_error(self, task_id: str, error: str):
+    async def add_error(self, task_id: str, error: str, traceback_str: str = ""):
         """添加错误记录"""
         client = await redis_manager.get_client()
         key = f"{TASK_PREFIX}{task_id}"
         errors = json.loads((await client.hget(key, "errors")) or "[]")
-        errors.append({"time": datetime.utcnow().isoformat(), "error": error})
+        error_entry = {"time": datetime.utcnow().isoformat(), "error": error}
+        if traceback_str:
+            error_entry["traceback"] = traceback_str
+        errors.append(error_entry)
         await client.hset(key, "errors", json.dumps(errors, ensure_ascii=False))
         await client.hset(key, "updated_at", datetime.utcnow().isoformat())
+        logger.error("Task error", extra={"task_id": task_id, "error": error, "traceback": traceback_str})
 
     async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         """获取任务状态"""

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     
     # 应用基础配置
     APP_NAME: str = Field(default="Magento-CJ-Middleware", description="应用名称")
-    APP_VERSION: str = Field(default="1.1.1", description="应用版本")
+    APP_VERSION: str = Field(default="1.2.0", description="应用版本")
     DEBUG: bool = Field(default=False, description="调试模式")
     HOST: str = Field(default="0.0.0.0", description="服务器地址")
     PORT: int = Field(default=3000, description="服务器端口")

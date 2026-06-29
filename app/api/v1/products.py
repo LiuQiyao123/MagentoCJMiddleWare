@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+import traceback
 import structlog
 import json
 
@@ -276,8 +277,9 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
         await task_manager.update_progress(task_id, 100, f"同步完成! {variant_msg}")
 
     except Exception as e:
-        await task_manager.mark_failed(task_id, str(e)[:200])
-        logger.error("后台同步失败", extra={"task_id": task_id, "error": str(e)})
+        tb = traceback.format_exc()
+        await task_manager.mark_failed(task_id, str(e)[:200], traceback_str=tb)
+        logger.error("后台同步失败", extra={"task_id": task_id, "error": str(e), "traceback": tb})
 
 
 @router.post("/sync/inventory")
