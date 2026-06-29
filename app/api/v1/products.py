@@ -270,11 +270,11 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
             "created_skus": created_skus,
             "created_ids": created_ids
         }
-        await task_manager.mark_success(task_id, result)
         variant_msg = f"主商品+{len(children)}个变体"
         if has_multiple_dims:
             variant_msg += f" (可配置商品, {len(dimensions)}维)"
         await task_manager.update_progress(task_id, 100, f"同步完成! {variant_msg}")
+        await task_manager.mark_success(task_id, result)
 
     except Exception as e:
         tb = traceback.format_exc()

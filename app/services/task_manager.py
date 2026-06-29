@@ -50,12 +50,14 @@ class TaskManager:
         return task_id
 
     async def update_progress(self, task_id: str, progress: int, message: str = "", log: str = ""):
-        """更新任务进度"""
+        """更新任务进度（不会覆盖 success/failed 状态）"""
         client = await redis_manager.get_client()
         key = f"{TASK_PREFIX}{task_id}"
+        current_status = await client.hget(key, "status")
+        if current_status not in (TaskStatus.SUCCESS, TaskStatus.FAILED):
+            await client.hset(key, "status", TaskStatus.RUNNING)
         await client.hset(key, "progress", progress)
         await client.hset(key, "message", message)
-        await client.hset(key, "status", TaskStatus.RUNNING)
         await client.hset(key, "updated_at", datetime.utcnow().isoformat())
         if log:
             await self._add_log(client, key, log)
