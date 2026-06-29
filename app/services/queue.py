@@ -4,13 +4,14 @@
 """
 
 import asyncio
-import logging
 from typing import Any, Dict, Optional
+
+import structlog
 
 from app.config.settings import get_settings
 from app.config.redis import redis_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 settings = get_settings()
 
 
@@ -43,18 +44,17 @@ class QueueManager:
             logger.info("Queue manager initialized successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize queue manager: {e}")
+            logger.error("Failed to initialize queue manager", extra={"error": str(e)})
             raise
     
     async def _create_queue(self, queue_name: str) -> None:
         """创建队列"""
         try:
             client = await redis_manager.get_client()
-            # 创建队列键（用于监控队列长度）
             await client.set(f"queue:{queue_name}:created", "1")
-            logger.debug(f"Queue {queue_name} created")
+            logger.debug("Queue created", extra={"queue": queue_name})
         except Exception as e:
-            logger.error(f"Failed to create queue {queue_name}: {e}")
+            logger.error("Failed to create queue", extra={"queue": queue_name, "error": str(e)})
     
     async def enqueue_task(self, queue_name: str, task_data: Dict[str, Any]) -> bool:
         """将任务加入队列"""
@@ -67,21 +67,17 @@ class QueueManager:
             
             client = await redis_manager.get_client()
             
-            # 将任务数据序列化并加入队列
             import json
             task_json = json.dumps(task_data)
             
-            # 使用Redis List作为队列
             await client.lpush(f"queue:{queue_name}:tasks", task_json)
-            
-            # 更新队列统计信息
             await self._update_queue_stats(queue_name, "enqueued")
             
-            logger.info(f"Task enqueued to {queue_name}", extra={"task_data": task_data})
+            logger.info("Task enqueued", extra={"queue": queue_name})
             return True
             
         except Exception as e:
-            logger.error(f"Failed to enqueue task to {queue_name}: {e}")
+            logger.error("Failed to enqueue task", extra={"queue": queue_name, "error": str(e)})
             return False
     
     async def dequeue_task(self, queue_name: str) -> Optional[Dict[str, Any]]:
@@ -95,23 +91,19 @@ class QueueManager:
             
             client = await redis_manager.get_client()
             
-            # 从队列中取出任务
             task_json = await client.brpop(f"queue:{queue_name}:tasks", timeout=1)
             
             if task_json:
                 import json
                 task_data = json.loads(task_json[1])
-                
-                # 更新队列统计信息
                 await self._update_queue_stats(queue_name, "dequeued")
-                
-                logger.debug(f"Task dequeued from {queue_name}", extra={"task_data": task_data})
+                logger.debug("Task dequeued", extra={"queue": queue_name})
                 return task_data
             
             return None
             
         except Exception as e:
-            logger.error(f"Failed to dequeue task from {queue_name}: {e}")
+            logger.error("Failed to dequeue task", extra={"queue": queue_name, "error": str(e)})
             return None
     
     async def get_queue_length(self, queue_name: str) -> int:
@@ -128,7 +120,7 @@ class QueueManager:
             return length
             
         except Exception as e:
-            logger.error(f"Failed to get queue length for {queue_name}: {e}")
+            logger.error("Failed to get queue length", extra={"queue": queue_name, "error": str(e)})
             return 0
     
     async def get_queue_stats(self, queue_name: str) -> Dict[str, Any]:
@@ -141,11 +133,7 @@ class QueueManager:
                 return {}
             
             client = await redis_manager.get_client()
-            
-            # 获取队列统计信息
             stats = await client.hgetall(f"queue:{queue_name}:stats")
-            
-            # 获取当前队列长度
             length = await self.get_queue_length(queue_name)
             
             return {
@@ -157,7 +145,7 @@ class QueueManager:
             }
             
         except Exception as e:
-            logger.error(f"Failed to get queue stats for {queue_name}: {e}")
+            logger.error("Failed to get queue stats", extra={"queue": queue_name, "error": str(e)})
             return {}
     
     async def _update_queue_stats(self, queue_name: str, stat_type: str) -> None:
@@ -166,7 +154,7 @@ class QueueManager:
             client = await redis_manager.get_client()
             await client.hincrby(f"queue:{queue_name}:stats", stat_type, 1)
         except Exception as e:
-            logger.error(f"Failed to update queue stats for {queue_name}: {e}")
+            logger.error("Failed to update queue stats", extra={"queue": queue_name, "error": str(e)})
     
     async def clear_queue(self, queue_name: str) -> bool:
         """清空队列"""
@@ -178,18 +166,14 @@ class QueueManager:
                 return False
             
             client = await redis_manager.get_client()
-            
-            # 删除队列中的所有任务
             await client.delete(f"queue:{queue_name}:tasks")
-            
-            # 重置统计信息
             await client.delete(f"queue:{queue_name}:stats")
             
-            logger.info(f"Queue {queue_name} cleared")
+            logger.info("Queue cleared", extra={"queue": queue_name})
             return True
             
         except Exception as e:
-            logger.error(f"Failed to clear queue {queue_name}: {e}")
+            logger.error("Failed to clear queue", extra={"queue": queue_name, "error": str(e)})
             return False
     
     async def get_all_queues_stats(self) -> Dict[str, Dict[str, Any]]:
@@ -200,19 +184,17 @@ class QueueManager:
                 stats[queue_name] = await self.get_queue_stats(queue_name)
             return stats
         except Exception as e:
-            logger.error(f"Failed to get all queues stats: {e}")
+            logger.error("Failed to get all queues stats", extra={"error": str(e)})
             return {}
     
     async def cleanup(self) -> None:
         """清理队列管理器"""
         try:
-            # 这里可以添加清理逻辑
-            # 例如清理过期的队列数据等
             self._initialized = False
             logger.info("Queue manager cleaned up")
         except Exception as e:
-            logger.error(f"Error during queue manager cleanup: {e}")
+            logger.error("Error during queue manager cleanup", extra={"error": str(e)})
 
 
 # 全局队列管理器实例
-queue_manager = QueueManager() 
+queue_manager = QueueManager()

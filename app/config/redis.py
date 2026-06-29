@@ -60,11 +60,14 @@ class RedisManager:
             await self.initialize()
         return self._client
     
-    async def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
+    async def set(self, key: str, value: Any, expire: Optional[int] = None, nx: bool = False) -> bool:
         """设置键值对"""
         try:
             client = await self.get_client()
-            result = await client.set(key, value, ex=expire)
+            kwargs = {"ex": expire}
+            if nx:
+                kwargs["nx"] = True
+            result = await client.set(key, value, **{k: v for k, v in kwargs.items() if v is not None})
             return bool(result)
         except Exception as e:
             logger.error(f"Redis SET error for key {key}: {e}")

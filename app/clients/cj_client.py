@@ -19,6 +19,12 @@ from app.core.exceptions import APIException
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 
+# CJ API 限流常量（Redis 分布式锁，防止并发认证触发 429）
+CJ_AUTH_LOCK_KEY = "cj_api:auth_lock"
+CJ_AUTH_LOCK_TTL = 310
+CJ_AUTH_RATE_WINDOW = 300  # CJ API: 1 request per 300 seconds
+
+
 
 class CJAPIError(APIException):
     """CJ API异常"""
@@ -130,7 +136,7 @@ class CJClient:
                 try:
                     await redis_manager.initialize()
                 except Exception as e:
-                    logger.warning(f"Redis initialization failed in CJClient: {e}")
+                    logger.warning("Redis initialization failed in CJClient", extra={"error": str(e)})
 
             logger.info("CJ API client initialized successfully (Lazy Auth)")
             
@@ -153,23 +159,61 @@ class CJClient:
             self._client = None
             
     async def _authenticate(self) -> None:
-        """认证获取访问令牌 (仅在无有效Token时调用)"""
+        """认证获取访问令牌 (仅在无有效Token时调用，带Redis分布式锁防429)"""
+        lock_acquired = False
         try:
-            # 构造认证请求
-            auth_data = {
-                "email": self.email,
-                "password": self.password
-            }
-            
+            # Redis 分布式锁：防止并发认证请求触发 CJ 429
+            acquired = await redis_manager.set(CJ_AUTH_LOCK_KEY, "1", expire=CJ_AUTH_LOCK_TTL, nx=True)
+            if not acquired:
+                logger.info("Another process is authenticating with CJ, waiting...")
+                deadline = time.time() + CJ_AUTH_LOCK_TTL
+                while time.time() < deadline:
+                    await asyncio.sleep(2)
+                    lock_val = await redis_manager.get(CJ_AUTH_LOCK_KEY)
+                    if lock_val is None:
+                        break
+                # 重试获取锁
+                acquired = await redis_manager.set(CJ_AUTH_LOCK_KEY, "1", expire=CJ_AUTH_LOCK_TTL, nx=True)
+
+            # 再次检查 Redis 缓存，避免重复认证
+            cached_token = await redis_manager.get("cj_api:access_token")
+            if cached_token:
+                c = await redis_manager.get_client()
+                ttl = await c.ttl("cj_api:access_token")
+                if ttl > 300:
+                    self._access_token = cached_token
+                    self._token_expires_at = datetime.now() + timedelta(seconds=ttl)
+                    logger.info("Reused cached token after lock wait")
+                    return
+
+            lock_acquired = acquired
+            if not acquired:
+                raise CJAPIError(
+                    error_code="CJ_RATE_LIMIT",
+                    message="Unable to acquire auth lock - CJ API rate limited",
+                    details={"hint": "Try again in 5 minutes"}
+                )
+
+            # 执行认证
+            auth_data = {"email": self.email, "password": self.password}
             logger.info("Requesting new Access Token from CJ API")
-            
-            # 发送认证请求
+
             response = await self._client.post(
                 f"{self.base_url}/authentication/getAccessToken",
                 json=auth_data,
                 headers={"Content-Type": "application/json"}
             )
-            
+
+            # 处理 429 限流
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "300")
+                logger.error("CJ API rate limited", extra={"status": 429, "retry_after": retry_after, "body": response.text})
+                raise CJAPIError(
+                    error_code="CJ_RATE_LIMIT",
+                    message=f"CJ API rate limited, retry after {retry_after}s",
+                    details={"retry_after": retry_after, "response": response.text}
+                )
+
             if response.status_code != 200:
                 logger.error("CJ Auth Failed", extra={"status": response.status_code, "body": response.text})
                 raise CJAPIError(
@@ -177,9 +221,8 @@ class CJClient:
                     message="Failed to authenticate with CJ API",
                     details={"status_code": response.status_code, "response": response.text}
                 )
-            
+
             result = response.json()
-            
             if not result.get("result"):
                 logger.error("CJ Auth Logic Failed", extra={"response": result})
                 raise CJAPIError(
@@ -187,28 +230,34 @@ class CJClient:
                     message="Authentication failed",
                     details={"response": result}
                 )
-            
+
             data = result.get("data", {})
-            self._access_token = data["accessToken"]
-            refresh_token = data["refreshToken"]
-            
-            # 有效期: AccessToken 15天, RefreshToken 180天
-            # 减去 300秒 (5分钟) 作为安全缓冲
+
+            # 健壮解析字段（兼容不同命名格式）
+            self._access_token = data.get("accessToken") or data.get("access_token") or data.get("token")
+            refresh_token = data.get("refreshToken") or data.get("refresh_token")
+
+            if not self._access_token:
+                raise CJAPIError(
+                    error_code="CJ_AUTH_PARSE_ERROR",
+                    message="Failed to parse CJ auth response: missing access token",
+                    details={"data_keys": list(data.keys()), "response": str(result)[:500]}
+                )
+
             access_ttl = (15 * 24 * 3600) - 300
             refresh_ttl = (180 * 24 * 3600) - 300
-            
             self._token_expires_at = datetime.now() + timedelta(seconds=access_ttl)
-            
-            # 保存到 Redis
+
             try:
                 await redis_manager.set("cj_api:access_token", self._access_token, expire=access_ttl)
-                await redis_manager.set("cj_api:refresh_token", refresh_token, expire=refresh_ttl)
+                if refresh_token:
+                    await redis_manager.set("cj_api:refresh_token", refresh_token, expire=refresh_ttl)
                 logger.info("Cached CJ tokens to Redis")
             except Exception as e:
-                logger.warning(f"Failed to cache tokens to Redis: {e}")
-            
+                logger.warning("Failed to cache tokens to Redis", extra={"error": str(e)})
+
             logger.info("CJ API authentication successful")
-            
+
         except httpx.RequestError as e:
             logger.error("CJ API authentication network error", extra={"error": str(e)})
             raise CJAPIError(
@@ -219,6 +268,12 @@ class CJClient:
         except Exception as e:
             logger.error("CJ API authentication error", extra={"error": str(e)})
             raise
+        finally:
+            if lock_acquired:
+                try:
+                    await redis_manager.delete(CJ_AUTH_LOCK_KEY)
+                except Exception:
+                    pass
 
     async def _refresh_token(self, refresh_token: str) -> None:
         """使用 Refresh Token 刷新 Access Token"""
@@ -241,8 +296,8 @@ class CJClient:
                 raise CJAPIError("Refresh API returned false") # 触发重新登录
                 
             data = result.get("data", {})
-            self._access_token = data["accessToken"]
-            new_refresh_token = data.get("refreshToken", refresh_token) # 有些接口可能不返回新的refresh token
+            self._access_token = data.get("accessToken") or data.get("access_token") or data.get("token")
+            new_refresh_token = data.get("refreshToken", refresh_token) or data.get("refresh_token", refresh_token) # 有些接口可能不返回新的refresh token
             
             # 更新有效期
             access_ttl = (15 * 24 * 3600) - 300
@@ -256,7 +311,7 @@ class CJClient:
                 await redis_manager.set("cj_api:refresh_token", new_refresh_token, expire=refresh_ttl)
                 logger.info("Refreshed and cached CJ tokens")
             except Exception as e:
-                logger.warning(f"Failed to cache refreshed tokens: {e}")
+                logger.warning("Failed to cache refreshed tokens", extra={"error": str(e)})
                 
         except Exception as e:
             logger.error(f"Token refresh failed: {e}")
@@ -280,7 +335,7 @@ class CJClient:
                     logger.debug("Restored Access Token from Redis")
                     return
         except Exception as e:
-            logger.warning(f"Redis Access Token check failed: {e}")
+            logger.warning("Redis Access Token check failed", extra={"error": str(e)})
 
         # 3. Redis Refresh Token 检查 & 刷新
         try:
@@ -293,7 +348,7 @@ class CJClient:
                         await self._refresh_token(refresh_token)
                         return # 刷新成功，直接返回
                     except Exception as refresh_error:
-                        logger.warning(f"Refresh failed, falling back to login: {refresh_error}")
+                        logger.warning("Refresh failed, falling back to login", extra={"error": str(refresh_error)})
         except Exception as e:
             logger.warning(f"Redis Refresh Token check failed: {e}")
 
@@ -417,26 +472,18 @@ class CJClient:
     # 订单相关接口
     async def create_order(
         self,
-        order_number: str,
-        products: List[CJOrderItem],
-        shipping_address: CJShippingAddress,
-        remark: Optional[str] = None
+        order_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """创建订单"""
-        order_data = {
-            "orderNumber": order_number,
-            "shippingAddress": shipping_address.dict(),
-            "products": [item.dict() for item in products]
-        }
-        
-        if remark:
-            order_data["remark"] = remark
-            
-        return await self._make_request("POST", "/shopping/order/createOrder", data=order_data)
+        """创建订单 (CJ API V3)"""
+        return await self._make_request("POST", "/shopping/order/createOrderV3", data=order_data)
     
     async def get_order_detail(self, order_id: str) -> Dict[str, Any]:
         """获取订单详情"""
         return await self._make_request("GET", "/shopping/order/getOrderDetail", params={"orderId": order_id})
+
+    async def get_order_status(self, order_id: str) -> Dict[str, Any]:
+        """获取订单状态 (别名)"""
+        return await self.get_order_detail(order_id)
     
     async def get_order_list(
         self,

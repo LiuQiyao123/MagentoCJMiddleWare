@@ -283,7 +283,7 @@ class MagentoClient:
         self,
         page: int = 1,
         page_size: int = 20,
-        search_criteria: Optional[Dict] = None
+        filters: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """获取订单列表"""
         params = {
@@ -291,9 +291,10 @@ class MagentoClient:
             "searchCriteria[currentPage]": page
         }
         
-        if search_criteria:
-            for key, value in search_criteria.items():
-                params[f"searchCriteria[{key}]"] = value
+        if filters:
+            for i, f in enumerate(filters):
+                for key, val in f.items():
+                    params[f"searchCriteria[filterGroups][0][filters][{i}][{key}]"] = val
         
         return await self._make_request("GET", "/orders", params=params)
     

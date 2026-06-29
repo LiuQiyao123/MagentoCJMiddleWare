@@ -63,19 +63,16 @@ class OrderSyncService:
             since_time = datetime.utcnow() - timedelta(hours=hours_back)
             
             # 获取Magento新订单
-            search_criteria = {
-                "filterGroups[0][filters][0][field]": "created_at",
-                "filterGroups[0][filters][0][value]": since_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "filterGroups[0][filters][0][conditionType]": "gt",
-                "filterGroups[1][filters][0][field]": "status",
-                "filterGroups[1][filters][0][value]": "processing",
-                "filterGroups[1][filters][0][conditionType]": "eq"
-            }
+            filters = [
+                {"field": "created_at", "value": since_time.strftime("%Y-%m-%d %H:%M:%S"), "conditionType": "gt"},
+                {"field": "status", "value": "processing", "conditionType": "eq"}
+            ]
             
             orders_response = await self.magento_client.get_orders(
+                filters=filters,
                 page=1,
                 page_size=50,
-                search_criteria=search_criteria
+                
             )
             
             orders = orders_response.get("items", [])
@@ -231,23 +228,28 @@ class OrderSyncService:
         if not shipping_address:
             shipping_address = magento_order.get("billing_address", {})
         
+        street = shipping_address.get("street", [""])
+        street1 = street[0] if isinstance(street, list) else street
+        street2 = street[1] if isinstance(street, list) and len(street) > 1 else ""
+        
         cj_order = {
             "orderNumber": magento_order["increment_id"],
-            "shippingAddress": {
-                "firstName": shipping_address.get("firstname", ""),
-                "lastName": shipping_address.get("lastname", ""),
-                "company": shipping_address.get("company", ""),
-                "address1": shipping_address.get("street", [""])[0] if shipping_address.get("street") else "",
-                "address2": shipping_address.get("street", ["", ""])[1] if len(shipping_address.get("street", [])) > 1 else "",
-                "city": shipping_address.get("city", ""),
-                "state": shipping_address.get("region", ""),
-                "zip": shipping_address.get("postcode", ""),
-                "country": shipping_address.get("country_id", ""),
-                "phone": shipping_address.get("telephone", ""),
-                "email": magento_order.get("customer_email", "")
-            },
+            "shippingCountryCode": shipping_address.get("country_id", ""),
+            "shippingCountry": shipping_address.get("country_id", ""),
+            "shippingProvince": shipping_address.get("region", ""),
+            "shippingCity": shipping_address.get("city", ""),
+            "shippingCounty": "",
+            "shippingZip": shipping_address.get("postcode", ""),
+            "shippingPhone": shipping_address.get("telephone", ""),
+            "shippingCustomerName": f"{shipping_address.get('firstname', '')} {shipping_address.get('lastname', '')}".strip(),
+            "shippingAddress": street1,
+            "shippingAddress2": street2,
+            "email": magento_order.get("customer_email", ""),
+            "logisticName": "CJ_STANDARD",
+            "fromCountryCode": "CN",
+            "remark": f"Magento Order: {magento_order['increment_id']}",
             "products": order_items,
-            "remark": f"Magento Order: {magento_order['increment_id']}"
+            "platform": "magento"
         }
         
         return cj_order

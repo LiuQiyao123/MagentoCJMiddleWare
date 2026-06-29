@@ -69,3 +69,7 @@ temp_*.py
 TEMP_*.md
 *_GUIDE.md
 *_SETUP.md 
+
+# Backup files
+*.bak
+MARKER.txt

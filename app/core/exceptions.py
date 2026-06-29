@@ -3,11 +3,11 @@
 定义API异常类和错误处理机制
 """
 
-import logging
+import structlog
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class APIException(Exception):
@@ -28,12 +28,12 @@ class APIException(Exception):
         self.details = details or {}
         self.timestamp = timestamp or datetime.now()
         
-        # 记录异常日志
+        # 使用 extra 包裹结构化数据，避免 structlog 23.x 的 kwargs 透传 BUG
         logger.error(
             "API Exception raised",
             extra={
                 "error_code": error_code,
-                "error_message": message,  # Renamed from message to avoid KeyError
+                "error_message": message,
                 "status_code": status_code,
                 "details": details
             }
@@ -42,110 +42,56 @@ class APIException(Exception):
 
 class ValidationError(APIException):
     """数据验证错误"""
-    
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="VALIDATION_ERROR",
-            status_code=400,
-            details=details
-        )
+        super().__init__(message=message, error_code="VALIDATION_ERROR", status_code=400, details=details)
 
 
 class AuthenticationError(APIException):
     """认证错误"""
-    
     def __init__(self, message: str = "Authentication failed", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="AUTHENTICATION_ERROR",
-            status_code=401,
-            details=details
-        )
+        super().__init__(message=message, error_code="AUTHENTICATION_ERROR", status_code=401, details=details)
 
 
 class AuthorizationError(APIException):
     """授权错误"""
-    
     def __init__(self, message: str = "Access denied", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="AUTHORIZATION_ERROR",
-            status_code=403,
-            details=details
-        )
+        super().__init__(message=message, error_code="AUTHORIZATION_ERROR", status_code=403, details=details)
 
 
 class NotFoundError(APIException):
     """资源未找到错误"""
-    
     def __init__(self, message: str = "Resource not found", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="NOT_FOUND",
-            status_code=404,
-            details=details
-        )
+        super().__init__(message=message, error_code="NOT_FOUND", status_code=404, details=details)
 
 
 class ConflictError(APIException):
     """资源冲突错误"""
-    
     def __init__(self, message: str = "Resource conflict", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="CONFLICT",
-            status_code=409,
-            details=details
-        )
+        super().__init__(message=message, error_code="CONFLICT", status_code=409, details=details)
 
 
 class RateLimitError(APIException):
     """速率限制错误"""
-    
     def __init__(self, message: str = "Rate limit exceeded", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="RATE_LIMIT_EXCEEDED",
-            status_code=429,
-            details=details
-        )
+        super().__init__(message=message, error_code="RATE_LIMIT_EXCEEDED", status_code=429, details=details)
 
 
 class ExternalServiceError(APIException):
     """外部服务错误"""
-    
     def __init__(self, message: str, service: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="EXTERNAL_SERVICE_ERROR",
-            status_code=502,
-            details={"service": service, **(details or {})}
-        )
+        super().__init__(message=message, error_code="EXTERNAL_SERVICE_ERROR", status_code=502, details={"service": service, **(details or {})})
 
 
 class DatabaseError(APIException):
     """数据库错误"""
-    
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="DATABASE_ERROR",
-            status_code=500,
-            details=details
-        )
+        super().__init__(message=message, error_code="DATABASE_ERROR", status_code=500, details=details)
 
 
 class ConfigurationError(APIException):
     """配置错误"""
-    
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            error_code="CONFIGURATION_ERROR",
-            status_code=500,
-            details=details
-        )
+        super().__init__(message=message, error_code="CONFIGURATION_ERROR", status_code=500, details=details)
 
 
 # 预定义的错误代码
@@ -182,4 +128,4 @@ def create_error_response(
         "details": details or {},
         "timestamp": datetime.now().isoformat(),
         "status_code": status_code
-    } 
+    }
