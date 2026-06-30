@@ -1,14 +1,20 @@
 # Cloudflare Tunnel — 沙箱环境（本地 WSL）
 # 通过 tunnel 暴露本地沙箱服务到外网
 tunnel: 3ed2bca3-691a-4021-9d96-3a4964910d2e
-credentials-file: /home/yao/.cloudflared/3ed2bca3-691a-4021-9d96-3a4964910d2e.json
+credentials-file: /home/nonroot/.cloudflared/3ed2bca3-691a-4021-9d96-3a4964910d2e.json
 
 ingress:
-  # Magento 沙箱
-  - hostname: shop-sandbox.yokileopard.top
-    service: http://localhost:8088
-  # 中间件沙箱
-  - hostname: mcj-sandbox.yokileopard.top
-    service: http://localhost:3000
+  # Magento 前台（本地沙箱）
+  - hostname: shop.yokileopard.top
+    service: http://magento-project-web-1:80
+
+  # Magento 后台（本地沙箱）
+  - hostname: shop-admin.yokileopard.top
+    service: http://magento-project-web-1:80
+
+  # 中间件 API（本地沙箱）
+  - hostname: mcj.yokileopard.top
+    service: http://magento_cj_app:3000
+
   # 兜底
   - service: http_status:404

@@ -6,8 +6,8 @@
 ┌─────────────────────────────────┐    ┌──────────────────────────────────┐
 │  沙箱环境（本地 WSL Docker）      │    │  正式环境（阿里云 ECS Docker）    │
 │                                 │    │                                  │
-│  shop-sandbox.yokileopard.top   │    │  shop.yokileopard.com            │
-│  mcj-sandbox.yokileopard.top    │    │  mcj.yokileopard.com             │
+│  shop.yokileopard.top           │    │  shop.yokileopard.com            │
+│  mcj.yokileopard.top            │    │  mcj.yokileopard.com             │
 │       ↑                         │    │       ↑                          │
 │  Cloudflare Tunnel              │    │  Cloudflare Tunnel               │
 │       ↑                         │    │       ↑                          │
