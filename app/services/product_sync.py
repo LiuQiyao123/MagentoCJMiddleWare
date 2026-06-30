@@ -513,7 +513,7 @@ class ProductSyncService:
                 "magento_id": magento_id,
                 "sku": product_sku,
                 "variants": child_products,
-                "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{magento_id}"
+                "magento_url": f"{(settings.MAGENTO_PUBLIC_URL or settings.MAGENTO_BASE_URL)}/admin/catalog/product/edit/id/{magento_id}"
             }
             return result
             

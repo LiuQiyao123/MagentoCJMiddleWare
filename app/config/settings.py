@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     
     # Magento配置
     MAGENTO_BASE_URL: str = Field(description="Magento基础URL")
+    MAGENTO_PUBLIC_URL: str = Field(default="", description="Magento前端公开URL，为空则回退到MAGENTO_BASE_URL")
     MAGENTO_API_TOKEN: str = Field(description="Magento API Token")
     MAGENTO_API_USER: str = Field(description="Magento API用户")
     MAGENTO_API_PASSWORD: str = Field(description="Magento API密码")

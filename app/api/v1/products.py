@@ -266,7 +266,7 @@ async def _run_sync(task_id: str, product_id: str, product_url: str, service: Pr
             "product_type": "configurable" if has_multiple_dims and len(root_variants) > 1 else "simple",
             "variants": len(children),
             "dimensions": [d[0] for d in dimensions] if has_multiple_dims else [],
-            "magento_url": f"{settings.MAGENTO_BASE_URL}/admin/catalog/product/edit/id/{mid}",
+            "magento_url": f"{(settings.MAGENTO_PUBLIC_URL or settings.MAGENTO_BASE_URL)}/admin/catalog/product/edit/id/{mid}",
             "created_skus": created_skus,
             "created_ids": created_ids
         }
