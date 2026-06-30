@@ -7,10 +7,10 @@ credentials-file: /etc/cloudflared/YOUR_ECS_TUNNEL_ID.json
 
 ingress:
   # Magento 正式
-  - hostname: shop.yokileopard.top
+  - hostname: shop.yokileopard.com
     service: http://localhost:80
   # 中间件正式
-  - hostname: mcj.yokileopard.top
+  - hostname: mcj.yokileopard.com
     service: http://localhost:3000
   # 兜底
   - service: http_status:404

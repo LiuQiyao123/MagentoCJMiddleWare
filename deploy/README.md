@@ -6,8 +6,8 @@
 ┌─────────────────────────────────┐    ┌──────────────────────────────────┐
 │  沙箱环境（本地 WSL Docker）      │    │  正式环境（阿里云 ECS Docker）    │
 │                                 │    │                                  │
-│  shop-sandbox.yokileopard.top   │    │  shop.yokileopard.top            │
-│  mcj-sandbox.yokileopard.top    │    │  mcj.yokileopard.top             │
+│  shop-sandbox.yokileopard.top   │    │  shop.yokileopard.com            │
+│  mcj-sandbox.yokileopard.top    │    │  mcj.yokileopard.com             │
 │       ↑                         │    │       ↑                          │
 │  Cloudflare Tunnel              │    │  Cloudflare Tunnel               │
 │       ↑                         │    │       ↑                          │
@@ -93,8 +93,8 @@ docker exec -i ecs-db-container mysql -u magento -pmagento magento < /tmp/magent
 |------|-----------|-----------|
 | Magento 端口 | 8088 | 80 |
 | MySQL 端口 | 33061 (host) | 3306 (internal) |
-| Magento URL | localhost:8088 | shop.yokileopard.top |
-| 中间件 URL | localhost:3000 | mcj.yokileopard.top |
+| Magento URL | localhost:8088 | shop.yokileopard.com |
+| 中间件 URL | localhost:3000 | mcj.yokileopard.com |
 | DEBUG | true | false |
 | CJ 模式 | 开发模式 | 正式模式 |
 | CORS | localhost + tunnel | 仅正式域名 |
