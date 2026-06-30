@@ -1,0 +1,16 @@
+# Cloudflare Tunnel — 正式环境（阿里云 ECS）
+# 注意: ECS 上的 cloudflared 应使用独立的 tunnel 和凭证
+# 此文件为参考模板，实际配置在 ECS 上部署时生成
+
+tunnel: YOUR_ECS_TUNNEL_ID
+credentials-file: /etc/cloudflared/YOUR_ECS_TUNNEL_ID.json
+
+ingress:
+  # Magento 正式
+  - hostname: shop.yokileopard.top
+    service: http://localhost:80
+  # 中间件正式
+  - hostname: mcj.yokileopard.top
+    service: http://localhost:3000
+  # 兜底
+  - service: http_status:404
